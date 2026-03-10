@@ -1,65 +1,48 @@
 import paramiko
 import os
 
-def setup_y_conectar(host, port, usuario, password):
+def conectar(host, port, usuario):
+    # Ruta de la llave privada SSH en tu máquina
     key_path = os.path.expanduser("~/.ssh/id_rsa")
+    
+    # Cargar la llave privada desde el archivo
+    key = paramiko.RSAKey.from_private_key_file(key_path)
 
-    # Generar llave si no existe
-    if not os.path.exists(key_path):
-        print("Generando llave SSH...")
-        key = paramiko.RSAKey.generate(4096)
-        key.write_private_key_file(key_path)
-        os.chmod(key_path, 0o600)
-        with open(key_path + ".pub", "w") as f:
-            f.write(f"ssh-rsa {key.get_base64()}")
-    else:
-        key = paramiko.RSAKey.from_private_key_file(key_path)
-        print("Llave existente cargada")
-
-    # Copiar llave si no está en la VM (usa contraseña solo esta vez)
-    try:
-        print("Intentando conectar sin contraseña...")
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(host, port=port, username=usuario, pkey=key)
-        print("Llave ya estaba configurada")
-
-    except paramiko.AuthenticationException:
-        print("Primera vez, copiando llave con contraseña...")
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(host, port=port, username=usuario, password=password)
-
-        pub_key = open(key_path + ".pub").read()
-        _, stdout, _ = client.exec_command(
-            f'mkdir -p ~/.ssh && echo "{pub_key}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
-        )
-        stdout.read()
-        client.close()
-
-        # Reconectar sin contraseña
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(host, port=port, username=usuario, pkey=key)
-        print("Llave copiada y conectado sin credenciales")
-
+    # Crear el cliente SSH
+    client = paramiko.SSHClient()
+    
+    # Aceptar automáticamente hosts desconocidos (sin pedir confirmación)
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Conectar a la VM usando la llave (sin contraseña)
+    client.connect(host, port=port, username=usuario, pkey=key)
+    
     return client
 
 def ejecutar(client, comando):
+    # Ejecutar el comando en la VM
     _, stdout, stderr = client.exec_command(comando)
+    
+    # Leer la salida del comando
     salida = stdout.read().decode().strip()
+    
+    # Leer errores si los hay
     error = stderr.read().decode().strip()
+    
+    # Imprimir salida y errores
     if salida:
         print(f"[OUT] {salida}")
     if error:
         print(f"[ERR] {error}")
+    
     return salida
 
-# Uso la contraseña solo se usa si es la primera vez
-client = setup_y_conectar("127.0.0.1", 2222, "kali", "kali")
+# Conectar a la VM (port forwarding 2222 -> 22 de la VM)
+client = conectar("127.0.0.1", 2222, "kali")
 
-# Comandos de análisis
+# Ejecutar comandos en la VM
 ejecutar(client, "whoami")
-ejecutar(client, "ls")
+ejecutar(client, "uname -a")
 
+# Cerrar la conexión al terminar
 client.close()

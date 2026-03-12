@@ -25,9 +25,9 @@ resume)
 
 *)
     echo "Uso:"
-    echo "./vmcontrol.sh start  NOMBRE_VM"
-    echo "./vmcontrol.sh stop   NOMBRE_VM"
-    echo "./vmcontrol.sh pause NOMBRE_VM"
-    echo "./vmcontrol.sh resume NOMBRE_VM"
+    echo "./cli.sh start  NOMBRE_VM"
+    echo "./cli.sh stop   NOMBRE_VM"
+    echo "./cli.sh pause NOMBRE_VM"
+    echo "./cli.sh resume NOMBRE_VM"
 ;;
 esac

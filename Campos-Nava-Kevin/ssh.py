@@ -42,7 +42,7 @@ client = conectar("127.0.0.1", 2222, "kali")
 
 # Ejecutar comandos en la VM
 ejecutar(client, "whoami")
-ejecutar(client, "uname -a")
+ejecutar(client, "ls")
 
 # Cerrar la conexión al terminar
 client.close()

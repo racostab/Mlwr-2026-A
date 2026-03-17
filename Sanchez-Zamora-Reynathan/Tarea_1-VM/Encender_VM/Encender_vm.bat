@@ -3,7 +3,6 @@
 ::  SSH AUTO-CONNECT - VMware Workstation
 ::  Enciende Ubuntu 64-bit y conecta via SSH con llave RSA
 ::  Passphrase se pide UNA sola vez por sesion de Windows
-::  Sanchez Zamora Reynathan
 :: ============================================================
 
 title SSH VM - fak3me@192.168.106.128
@@ -15,15 +14,37 @@ color 0A
 set VM_USER=fak3me
 set VM_IP=192.168.106.128
 set VM_PORT=22
-set KEY_PATH=C:\Users\Fakeme\.ssh\id_rsa
+set KEY_PATH=%USERPROFILE%\.ssh\id_rsa
 set VMRUN="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
-set VMX_PATH=C:\Users\Fakeme\OneDrive - Instituto Politecnico Nacional\Documents\Virtual Machines\Ubuntu 64-bit\Ubuntu 64-bit.vmx
+
+
+:: ─────────────────────────────────────────────────────────────
+::  DETECTAR RUTA DEL .VMX AUTOMATICAMENTE
+::  Busca primero en local, luego en OneDrive
+:: ─────────────────────────────────────────────────────────────
+set VMX_LOCAL=%USERPROFILE%\Documents\Virtual Machines\Ubuntu 64-bit\Ubuntu 64-bit.vmx
+set VMX_ONEDRIVE=%USERPROFILE%\OneDrive - Instituto Politecnico Nacional\Documents\Virtual Machines\Ubuntu 64-bit\Ubuntu 64-bit.vmx
+
+if exist "%VMX_LOCAL%" (
+    set VMX_PATH=%VMX_LOCAL%
+    set VMX_ORIGEN=Local
+) else if exist "%VMX_ONEDRIVE%" (
+    set VMX_PATH=%VMX_ONEDRIVE%
+    set VMX_ORIGEN=OneDrive
+) else (
+    echo.
+    echo  [ERROR] No se encontro el archivo .vmx en ninguna ruta.
+    echo          Local    : %VMX_LOCAL%
+    echo          OneDrive : %VMX_ONEDRIVE%
+    pause & exit /b 1
+)
 
 echo.
 echo  ╔══════════════════════════════════════════════════╗
 echo  ║   SSH Auto-Connect - VMware Workstation          ║
 echo  ║   VM   : Ubuntu 64-bit                          ║
 echo  ║   Host : fak3me@192.168.106.128                 ║
+echo  ║   VMX  : %VMX_ORIGEN%
 echo  ╚══════════════════════════════════════════════════╝
 echo.
 
@@ -33,9 +54,11 @@ if not exist "%KEY_PATH%" (
     echo.
     echo  [ERROR] No se encontro la llave privada en:
     echo          %KEY_PATH%
+    echo.
+    echo  Asegurate de tener tu id_rsa en %USERPROFILE%\.ssh\
     pause & exit /b 1
 )
-echo         OK - Llave encontrada
+echo         OK - Llave encontrada en %USERPROFILE%\.ssh\id_rsa
 
 :: ─── PASO 2: Verificar vmrun.exe ────────────────────────────
 echo  [2/5] Verificando VMware Workstation...

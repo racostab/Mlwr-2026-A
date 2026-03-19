@@ -9,23 +9,14 @@ def run_terminal_command():
         description="A simple wrapper to execute terminal commands."
     )
 
-    parser.add_argument("command", help="The main terminal command to run.", default='ls')
-    parser.add_argument("params", nargs=argparse.REMAINDER, help="Additional parameters for the command.", default='-la')
+    parser.add_argument("command", nargs='?', default='ls', help="The main terminal command to run.")
+    parser.add_argument("params", nargs=argparse.REMAINDER, help="Additional parameters for the command.")
 
     args = parser.parse_args()
 
     full_cmd = [args.command] + args.params
 
     try:
-        #result = subprocess.run(
-        #    full_cmd,
-        #    capture_output=True,
-        #    text=True,
-        #    check=True
-        #)
-        #sys.stdout.write("--- Command Output ---\n")
-        #sys.stdout.write(result.stdout)
-
         stream = os.popen(' '.join(full_cmd))
         output = stream.read()
         sys.stdout.write("--- Command Output ---\n")

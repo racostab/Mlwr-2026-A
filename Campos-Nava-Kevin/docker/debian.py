@@ -18,6 +18,7 @@ KEY_PATH = os.path.expanduser("~/.ssh/id_rsa")
 
 
 def conectar():
+    # Verificar que la llave privada existe antes de intentar conectar
     if not os.path.exists(KEY_PATH):
         raise FileNotFoundError(f"No se encontró la llave en {KEY_PATH}")
 

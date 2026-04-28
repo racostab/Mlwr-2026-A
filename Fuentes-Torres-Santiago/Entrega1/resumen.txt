@@ -7,6 +7,7 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  PARTE 1 — HIPERVISOR VIRTUALBOX
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Solo lo contola, no instala
 
 [ control_vm.bat ]  —  Script-VB
   Controla una VM de VirtualBox desde CMD de Windows.
@@ -24,49 +25,20 @@
 
 ------------------------------------------------------------
 
-[ programa_vm.py ]  —  programa_vm
+[ vm.py ]  —  programa_vm
   Equivalente Python de control_vm.bat.
   Usa subprocess para llamar a VBoxManage.exe.
 
   Comandos:
-    python programa_vm.py list               Lista todas las VMs
-    python programa_vm.py status  [vm]       Estado de la VM
-    python programa_vm.py start   [vm]       Inicia la VM
-    python programa_vm.py stop    [vm]       Apaga la VM
-    python programa_vm.py pause   [vm]       Pausa la VM
-    python programa_vm.py resume  [vm]       Reanuda la VM
-    python programa_vm.py snapshot [vm]      Crea un snapshot
+    python vm.py list               Lista todas las VMs
+    python vm.py status  [vm]       Estado de la VM
+    python vm.py start   [vm]       Inicia la VM
+    python vm.py stop    [vm]       Apaga la VM
+    python vm.py pause   [vm]       Pausa la VM
+    python vm.py resume  [vm]       Reanuda la VM
+    python vm.py snapshot [vm]      Crea un snapshot
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- PARTE 1 — HIPERVISOR QEMU  (pendiente de VM)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ control_qemu.bat ]  —  Script-QE
-  Controla una VM de QEMU desde CMD de Windows.
-  Usa qemu-system-x86_64.exe, qemu-img.exe y taskkill.
-  El pause/resume se comunica via monitor QEMU en puerto 4444.
-
-  Comandos:
-    control_qemu.bat start              Inicia la VM Debian
-    control_qemu.bat stop               Detiene la VM (forzado)
-    control_qemu.bat pause              Pausa la VM via monitor
-    control_qemu.bat resume             Reanuda la VM via monitor
-    control_qemu.bat status             Muestra si esta corriendo
-    control_qemu.bat snapshot [nombre]  Crea snapshot del .qcow2
-
-  Imagen configurada: C:\Programacion\qemu\debian.qcow2
-  SSH disponible en: localhost:2222
-  Monitor QEMU en:   localhost:4444
-
-  ESTADO: Pendiente — VM Debian sin instalar en QEMU
-
-------------------------------------------------------------
-
-[ programa_qemu.py ]  —  programa_qemu
-  Equivalente Python de control_qemu.bat.
-  Usa subprocess para llamar a qemu-system-x86_64.exe y qemu-img.exe.
-
-  ESTADO: Pendiente — VM Debian sin instalar en QEMU
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  PARTE 2 — ACCESO REMOTO SSH

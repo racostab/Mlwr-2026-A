@@ -1,44 +1,55 @@
-
-from vboxapi import VirtualBoxManager
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from core.config import kali as cfg
+
+try:
+    from vboxapi import VirtualBoxManager
+except ImportError:
+    VirtualBoxManager = None
 
 
-mgr = VirtualBoxManager(None, None)
-vbox = mgr.getVirtualBox()
+def run(action: str, vm_name: str = None):
+    if VirtualBoxManager is None:
+        print("[!] vboxapi no disponible. Usa cli.sh para controlar la VM con VBoxManage.")
+        return
+
+    if vm_name is None:
+        vm_name = cfg()["vm_name"]
+
+    mgr     = VirtualBoxManager(None, None)
+    vbox    = mgr.getVirtualBox()
+    machine = vbox.findMachine(vm_name)
+    session = mgr.getSessionObject(vbox)
+
+    if action == "start":
+        progress = machine.launchVMProcess(session, "headless", "")
+        progress.waitForCompletion(-1)
+        print(f"[+] VM '{vm_name}' iniciada")
+
+    elif action == "stop":
+        machine.lockMachine(session, 1)
+        session.console.powerDown()
+        print(f"[+] VM '{vm_name}' apagada")
+
+    elif action == "pause":
+        machine.lockMachine(session, 1)
+        session.console.pause()
+        print(f"[+] VM '{vm_name}' pausada")
+
+    elif action == "resume":
+        machine.lockMachine(session, 1)
+        session.console.resume()
+        print(f"[+] VM '{vm_name}' reanudada")
+
+    else:
+        print(f"[!] Acción desconocida: {action}")
+        print("    Acciones válidas: start | stop | pause | resume")
 
 
-action = sys.argv[1]
-vm_name = sys.argv[2]
-
-# Buscar la máquina virtual por nombre. Si no existe, `findMachine` lanzará
-# una excepción (no capturada aquí, para mantener la lógica original).
-machine = vbox.findMachine(vm_name)
-
-# Crear un objeto de sesión. Este objeto se usa para bloquear la máquina y
-# acceder a su consola cuando se requiera (stop/pause/resume).
-session = mgr.getSessionObject(vbox)
-
-if action == "start":
-    # Arranca la VM en modo "headless" (sin GUI). Se obtiene un objeto de
-    # progreso y se espera a que la operación termine.
-    progress = machine.launchVMProcess(session, "headless", "")
-    progress.waitForCompletion(-1)  # -1 = esperar indefinidamente
-
-elif action == "stop":
-    # Bloquea la máquina en modo compartido (tipo 1) para obtener la consola
-    # y solicitar el apagado (powerDown).
-    machine.lockMachine(session, 1)  # tipo de bloqueo: 1 = Shared, 2 = Write
-    console = session.console
-    console.powerDown()
-
-elif action == "pause":
-    # Bloqueo y pausa de la VM; útil para detener temporalmente su ejecución.
-    machine.lockMachine(session, 1)
-    console = session.console
-    console.pause()
-
-elif action == "resume":
-    # Bloqueo y reanudación de la ejecución de la VM.
-    machine.lockMachine(session, 1)
-    console = session.console
-    console.resume()
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Uso: python3 api.py <start|stop|pause|resume> [vm_name]")
+        sys.exit(1)
+    run(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)

@@ -1,52 +1,79 @@
-import paramiko
-import configparser
-import os
+import sys
+from pathlib import Path
 
-
-# Leer config_debian.ini (espera que el archivo exista en el directorio
-# desde donde se ejecuta el script)
-config = configparser.ConfigParser()
-config.read("config_debian.ini")
-
-# Parámetros de conexión leídos desde la sección [debian]
-HOST = config["debian"]["host"]
-PORT = int(config["debian"]["port"])
-USER = config["debian"]["user"]
-
-# Ruta de la llave privada en el equipo local (expandir ~)
-KEY_PATH = os.path.expanduser("~/.ssh/id_rsa")
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from core.config import docker as cfg
+from core.ssh    import conectar as _conectar, ejecutar
 
 
 def conectar():
-    # Verificar que la llave privada existe antes de intentar conectar
-    if not os.path.exists(KEY_PATH):
-        raise FileNotFoundError(f"No se encontró la llave en {KEY_PATH}")
+    c = cfg()
+    return _conectar(c["host"], c["port"], c["user"], c["key_path"], label="Debian")
 
-    # Ajustar permisos de la llave privada para que sólo el propietario la lea
-    os.chmod(KEY_PATH, 0o600)
 
-    # Cargar la llave privada y conectar con Paramiko
-    key = paramiko.RSAKey.from_private_key_file(KEY_PATH)
-    client = paramiko.SSHClient() # Crear cliente SSH de Paramiko
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # Aceptar host keys automáticamente 
-    client.connect(HOST, port=PORT, username=USER, pkey=key, timeout=10)
-    print("[+] Conectado a Debian")
-    return client
+def hash_archivo(client, ruta: str) -> dict:
+    comandos = {
+        "MD5":    f"md5sum {ruta}    | cut -d' ' -f1",
+        "SHA1":   f"sha1sum {ruta}   | cut -d' ' -f1",
+        "SHA256": f"sha256sum {ruta} | cut -d' ' -f1",
+    }
+    resultados = {}
+    for nombre, cmd in comandos.items():
+        _, stdout, stderr = client.exec_command(cmd)
+        stdout.channel.recv_exit_status()
+        valor = stdout.read().decode().strip()
+        error = stderr.read().decode().strip()
+        resultados[nombre] = f"ERROR: {error}" if error else valor
+    return resultados
 
-def ejecutar(client, comando):
-    _, stdout, stderr = client.exec_command(comando)
-    # Esperar a que termine el comando (sin límite de timeout aquí)
+
+def file_archivo(client, ruta: str) -> str:
+    _, stdout, stderr = client.exec_command(f"file {ruta}")
     stdout.channel.recv_exit_status()
-    salida = stdout.read().decode().strip()
-    error  = stderr.read().decode().strip()
-    if salida:
-        print(f"[OUT] {salida}")
-    if error:
-        print(f"[ERR] {error}")
-    return salida
+    return stdout.read().decode().strip() or stderr.read().decode().strip()
 
 
-client = conectar()
-ejecutar(client, "whoami")
-ejecutar(client, "uname -a")
-client.close()
+def strings_archivo(client, ruta: str, min_len: int = 4) -> str:
+    _, stdout, _ = client.exec_command(f"strings -n {min_len} {ruta}")
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode(errors="replace").strip()
+
+
+def entropia_archivo(client, ruta: str) -> str:
+    script = (
+        "import math,collections;"
+        f"d=open('{ruta}','rb').read();"
+        "freq=collections.Counter(d);"
+        "e=-sum((c/len(d))*math.log2(c/len(d)) for c in freq.values());"
+        "print(f'{e:.4f}')"
+    )
+    _, stdout, stderr = client.exec_command(f"python3 -c \"{script}\"")
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode().strip() or stderr.read().decode().strip()
+
+
+def ssdeep_archivo(client, ruta: str) -> str:
+    _, stdout, stderr = client.exec_command(f"ssdeep {ruta}")
+    stdout.channel.recv_exit_status()
+    out = stdout.read().decode().strip()
+    err = stderr.read().decode().strip()
+    if err:
+        return f"ERROR: {err}"
+    # ssdeep prints header + hash line; return just the hash line
+    lines = [l for l in out.splitlines() if l and not l.startswith("ssdeep")]
+    return lines[0] if lines else out
+
+
+if __name__ == "__main__":
+    client = conectar()
+    if len(sys.argv) == 3 and sys.argv[1] == "hash":
+        ruta   = sys.argv[2]
+        hashes = hash_archivo(client, ruta)
+        print(f"\nArchivo: {ruta}")
+        for alg, val in hashes.items():
+            print(f"  {alg:<8} {val}")
+    else:
+        ejecutar(client, "whoami")
+        ejecutar(client, "uname -a")
+        ejecutar(client, "cat /etc/os-release")
+    client.close()

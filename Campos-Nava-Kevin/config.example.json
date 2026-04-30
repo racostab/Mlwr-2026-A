@@ -1,0 +1,16 @@
+{
+  "docker": {
+    "container": "debian",
+    "host": "127.0.0.1",
+    "port": 2223,
+    "user": "root",
+    "key_path": "~/.ssh/id_rsa"
+  },
+  "kali": {
+    "host": "127.0.0.1",
+    "port": 2222,
+    "user": "kali",
+    "key_path": "~/.ssh/id_rsa",
+    "vm_name": "kali-malware-lab"
+  }
+}

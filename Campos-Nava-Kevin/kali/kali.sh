@@ -1,22 +1,19 @@
 #!/bin/bash
+set -e
 
-# Instalar sshpass si no está instalado
-if ! command -v sshpass &>/dev/null; then
-    echo "[*] Instalando sshpass..."
-    sudo apt install -y sshpass
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG="$ROOT/config.json"
+
+if ! command -v jq &>/dev/null; then
+    echo "[!] jq requerido: sudo apt install jq"
+    exit 1
 fi
 
-# Leer config_kali.ini
-HOST=$(grep "^host"     config_kali.ini | cut -d'=' -f2 | tr -d ' ')
-PORT=$(grep "^port"     config_kali.ini | cut -d'=' -f2 | tr -d ' ')
-USER=$(grep "^user"     config_kali.ini | cut -d'=' -f2 | tr -d ' ')
+HOST=$(jq -r '.kali.host'     "$CONFIG")
+PORT=$(jq -r '.kali.port'     "$CONFIG")
+USER=$(jq -r '.kali.user'     "$CONFIG")
+KEY=$(eval echo "$(jq -r '.kali.key_path' "$CONFIG")")
 
-KEY="$HOME/.ssh/id_rsa"
-
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "[$HOST]:$PORT" 2>/dev/null || true
 chmod 600 "$KEY"
-
-# Limpiar huella guardada
-ssh-keygen -f ~/.ssh/known_hosts -R "[$HOST]:$PORT" 2>/dev/null || true
-
-# Conectarse sin contraseña
 ssh -o StrictHostKeyChecking=no -i "$KEY" -p "$PORT" "$USER@$HOST"

@@ -5,6 +5,7 @@ Uso: python vm.py [accion] [nombre_vm]
      python vm.py list
      python vm.py start nombre_vm
      python vm.py stop  nombre_vm
+     
 """
 import subprocess
 import sys
@@ -66,6 +67,7 @@ def crear_snapshot(nombre: str, snap_nombre: str) -> bool:
     print(f'[-------------------->] Error: {err}')
     return False
 
+"Glosario de Acciones y su respectiva funcion "
 if __name__ == '__main__':
     ACCIONES = {
         'list':     lambda: print(json.dumps(listar_vms(), indent=2)),

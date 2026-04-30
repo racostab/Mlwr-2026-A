@@ -1,0 +1,132 @@
+============================================================
+ RESUMEN DEL PROYECTO — Infraestructura Virtual
+ Alumno: Fuentes Torres Santiago
+ Fecha:  12/04/2026
+============================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ PARTE 1 — HIPERVISOR VIRTUALBOX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Solo lo contola, no instala
+
+[ control_vm.bat ]  —  Script-VB
+  Controla una VM de VirtualBox desde CMD de Windows.
+  Llama directamente a VBoxManage.exe.
+
+  Comandos:
+    control_vm.bat start    [vm]       Inicia la VM
+    control_vm.bat stop     [vm]       Apaga la VM
+    control_vm.bat pause    [vm]       Pausa la VM
+    control_vm.bat resume   [vm]       Reanuda la VM
+    control_vm.bat status   [vm]       Muestra el estado
+    control_vm.bat snapshot [vm]       Crea un snapshot
+
+  VM configurada: ciber (Debian 64-bit)
+
+------------------------------------------------------------
+
+[ vm.py ]  —  programa_vm
+  Equivalente Python de control_vm.bat.
+  Usa subprocess para llamar a VBoxManage.exe.
+
+  Comandos:
+    python vm.py list               Lista todas las VMs
+    python vm.py status  [vm]       Estado de la VM
+    python vm.py start   [vm]       Inicia la VM
+    python vm.py stop    [vm]       Apaga la VM
+    python vm.py pause   [vm]       Pausa la VM
+    python vm.py resume  [vm]       Reanuda la VM
+    python vm.py snapshot [vm]      Crea un snapshot
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ PARTE 2 — ACCESO REMOTO SSH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ Configuracion del ambiente:
+   Host/Alias:     ciber-vm
+   Usuario:        debian
+   Puerto:         2222
+   Autenticacion:  Clave publica (sin contraseña)
+   Clave privada:  C:\Users\santi\.ssh\id_ciber
+   Config file:    C:\Users\santi\.ssh\config
+   Red VM:         NAT con reenvio de puertos 2222 → 22
+
+------------------------------------------------------------
+
+[ ssh_login.bat ]  —  Script [login]
+  Abre una sesion SSH interactiva hacia la VM.
+  Llama directamente a ssh.exe de Windows.
+
+  Comandos:
+    ssh_login.bat                 Conecta a ciber-vm (default)
+    ssh_login.bat [host]          Conecta al host especificado
+
+  Ejemplos:
+    ssh_login.bat
+    ssh_login.bat ciber-vm
+
+------------------------------------------------------------
+
+[ ssh_cmd.bat ]  —  Script [cmd]
+  Ejecuta un comando remoto en la VM sin abrir sesion interactiva.
+  Llama directamente a ssh.exe de Windows.
+  Captura y muestra la salida del comando.
+
+  Comandos:
+    ssh_cmd.bat [comando]              Ejecuta en ciber-vm
+    ssh_cmd.bat [host] [comando]       Ejecuta en host especifico
+
+  Ejemplos:
+    ssh_cmd.bat whoami
+    ssh_cmd.bat ciber-vm df -h
+    ssh_cmd.bat ciber-vm uname -a
+    ssh_cmd.bat ciber-vm ls /home
+
+------------------------------------------------------------
+
+[ programa_ssh.py ]  —  programa
+  Equivalente Python de ssh_login.bat y ssh_cmd.bat.
+  Usa subprocess para llamar a ssh.exe.
+  Incluye tres funciones: ssh_login, ssh_cmd, ssh_cmd_params.
+
+  Comandos:
+    python programa_ssh.py login                   Sesion interactiva
+    python programa_ssh.py login [host]            Sesion en host especifico
+    python programa_ssh.py cmd [comando]           Ejecuta comando
+    python programa_ssh.py cmd [host] [comando]    Ejecuta en host especifico
+    python programa_ssh.py ejemplo                 Ejecuta demos automaticas
+
+  Ejemplos:
+    python programa_ssh.py login
+    python programa_ssh.py cmd whoami
+    python programa_ssh.py cmd df -h
+    python programa_ssh.py cmd ciber-vm uname -a
+    python programa_ssh.py ejemplo
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ PARTE 3 — CONTENEDORES DOCKER  (pendiente)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ docker_login.bat ]   PENDIENTE
+[ docker_cmd.bat ]     PENDIENTE
+[ programa_docker.py ] PENDIENTE
+
+  Arquitectura planeada:
+    Windows CMD → ssh.exe → VM Debian → Docker → Contenedor
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ARQUITECTURA GENERAL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  control_vm.bat    → VBoxManage.exe → VirtualBox → VM ciber
+  programa_vm.py    → VBoxManage.exe → VirtualBox → VM ciber
+  control_qemu.bat  → qemu-system-x86_64.exe → QEMU → debian.qcow2
+  programa_qemu.py  → qemu-system-x86_64.exe → QEMU → debian.qcow2
+  ssh_login.bat     → ssh.exe → VM ciber (puerto 2222)
+  ssh_cmd.bat       → ssh.exe → VM ciber (puerto 2222)
+  programa_ssh.py   → ssh.exe → VM ciber (puerto 2222)
+  programa_docker.py → ssh.exe → VM ciber → Docker → Contenedor
+
+============================================================

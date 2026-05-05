@@ -2,11 +2,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.config import docker as cfg
-from core.ssh    import conectar as _conectar, ejecutar
+from core.ssh import conectar as _conectar, ejecutar
 
 
 def conectar():
+    from core.config import docker as cfg
     c = cfg()
     return _conectar(c["host"], c["port"], c["user"], c["key_path"], label="Debian")
 

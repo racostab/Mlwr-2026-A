@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados — {{ data.filename }}</title>
+    <style>
+        body { font-family: monospace; max-width: 900px; margin: 60px auto; padding: 0 20px; background: #1a1a1a; color: #e0e0e0; }
+        h1 { color: #00ff88; }
+        h2 { color: #00aaff; border-bottom: 1px solid #333; padding-bottom: 6px; }
+        a { color: #00ff88; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 6px 12px; border: 1px solid #333; }
+        td:first-child { color: #aaa; width: 100px; }
+        code { color: #ffcc00; word-break: break-all; }
+        pre { background: #2a2a2a; padding: 12px; overflow-x: auto; max-height: 400px; font-size: 0.85rem; line-height: 1.4; }
+        .value { color: #00ff88; }
+    </style>
+</head>
+<body>
+    <h1>{{ data.filename }}</h1>
+    <a href="/">← Analizar otro archivo</a>
+
+    <h2>Hashes</h2>
+    <table>
+        {% for alg, val in data.hash.items %}
+        <tr><td>{{ alg }}</td><td><code>{{ val }}</code></td></tr>
+        {% endfor %}
+    </table>
+
+    <h2>Tipo de archivo</h2>
+    <p class="value">{{ data.file }}</p>
+
+    <h2>Entropía</h2>
+    <p class="value">{{ data.entropy }} bits/byte</p>
+
+    <h2>SSDeep</h2>
+    <p><code>{{ data.ssdeep }}</code></p>
+
+    <h2>Strings ({{ data.strings|length }} encontradas)</h2>
+    <pre>{% for s in data.strings %}{{ s }}
+{% endfor %}</pre>
+</body>
+</html>

@@ -1,0 +1,51 @@
+version: '3.9'
+
+services:
+
+  debian:
+    build: ./docker
+    container_name: debian
+    networks:
+      - lab-net
+    ports:
+      - "2223:22"
+    volumes:
+      - ${HOME}/.ssh/id_rsa.pub:/tmp/authorized_keys:ro
+    restart: unless-stopped
+
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    container_name: engine
+    networks:
+      - lab-net
+    ports:
+      - "8001:8001"
+    volumes:
+      - ${HOME}/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+    environment:
+      - DEBIAN_HOST=debian
+      - DEBIAN_PORT=22
+      - DEBIAN_USER=root
+      - KEY_PATH=/root/.ssh/id_rsa
+    depends_on:
+      - debian
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    container_name: web
+    networks:
+      - lab-net
+    ports:
+      - "8000:8000"
+    environment:
+      - ENGINE_URL=http://engine:8001
+    depends_on:
+      - engine
+    restart: unless-stopped
+
+networks:
+  lab-net:
+    driver: bridge

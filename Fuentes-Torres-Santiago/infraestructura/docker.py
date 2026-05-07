@@ -4,16 +4,16 @@
 #  Equivalente Python de docker_login.bat y docker_cmd.bat
 #
 # 
-#    python programa_docker.py login
-#    python programa_docker.py login [contenedor]
-#    python programa_docker.py cmd whoami
-#    python programa_docker.py cmd [contenedor] uname -a
-#    python programa_docker.py list
-#    python programa_docker.py create
-#    python programa_docker.py start  [contenedor]
-#    python programa_docker.py stop   [contenedor]
-#    python programa_docker.py logs   [contenedor]
-#    python programa_docker.py ejemplo
+#    python docker.py login
+#    python docker.py login [contenedor]
+#    python docker.py cmd whoami
+#    python docker.py cmd [contenedor] uname -a
+#    python docker.py list
+#    python docker.py create
+#    python docker.py start  [contenedor]
+#    python docker.py stop   [contenedor]
+#    python docker.py logs   [contenedor]
+#    python docker.py ejemplo
 # ============================================================
 
 import subprocess

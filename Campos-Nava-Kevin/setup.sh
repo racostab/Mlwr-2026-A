@@ -2,182 +2,113 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG="$SCRIPT_DIR/config.json"
-
-# ── helpers ───────────────────────────────────────────────────────────────────
+KEY_DIR="$SCRIPT_DIR/lab_keys"
+ENV_FILE="$SCRIPT_DIR/.env"
+LAB_STARTED=false
+KALI_STARTED=false
 
 ok()   { echo "[+] $*"; }
 info() { echo "[*] $*"; }
 warn() { echo "[!] $*"; }
 
-check_cmd() {
-    if command -v "$1" &>/dev/null; then
-        ok "$1 instalado"
-    else
-        warn "$1 no encontrado — $2"
-        return 1
-    fi
+cleanup() {
+    echo ""
+    info "Apagando el lab..."
+    cd "$SCRIPT_DIR"
+    $KALI_STARTED && vagrant halt 2>/dev/null || true
+    docker compose down
+    exit 0
 }
-
-# ── dependencias ──────────────────────────────────────────────────────────────
+trap cleanup INT TERM
 
 echo "================================================="
 echo "  Malware Lab — Setup"
 echo "================================================="
 echo ""
+
+# ── dependencias ──────────────────────────────────────────────────────────────
+
 echo "-- Verificando dependencias --"
-check_cmd python3  "instala Python 3"
-check_cmd docker   "https://docs.docker.com/engine/install/"
-check_cmd jq       "sudo apt install jq"
+command -v docker  >/dev/null || { warn "Docker no instalado: https://docs.docker.com/engine/install/"; exit 1; }
+docker compose version >/dev/null 2>&1 || { warn "Docker Compose v2 requerido"; exit 1; }
+command -v ssh-keygen >/dev/null || { warn "ssh-keygen no encontrado"; exit 1; }
+ok "docker / docker compose / ssh-keygen"
 echo ""
 
-# ── config.json ───────────────────────────────────────────────────────────────
+# ── llaves SSH del lab (NO las del usuario) ──────────────────────────────────
 
-echo "-- Configuración --"
-if [ ! -f "$CONFIG" ]; then
-    cp "$SCRIPT_DIR/config.example.json" "$CONFIG"
-    ok "config.json creado desde config.example.json"
-    warn "Edita config.json con tus valores antes de continuar (usuario, etc.)"
-    echo ""
-    read -rp "¿Abrir config.json ahora? [S/n]: " resp
-    [[ "$resp" =~ ^[Ss]$|^$ ]] && "${EDITOR:-nano}" "$CONFIG"
+echo "-- Llaves SSH del lab --"
+mkdir -p "$KEY_DIR"
+chmod 700 "$KEY_DIR"
+if [ ! -f "$KEY_DIR/id_rsa" ]; then
+    ssh-keygen -t rsa -b 4096 -f "$KEY_DIR/id_rsa" -N "" -C "malware-lab" -q
+    ok "Llaves generadas en lab_keys/"
 else
-    ok "config.json ya existe"
+    ok "Llaves ya existen en lab_keys/"
+fi
+chmod 600 "$KEY_DIR/id_rsa"
+chmod 644 "$KEY_DIR/id_rsa.pub"
+echo ""
+
+# ── .env ──────────────────────────────────────────────────────────────────────
+
+if [ ! -f "$ENV_FILE" ]; then
+    cp "$SCRIPT_DIR/.env.example" "$ENV_FILE"
+    ok ".env creado desde .env.example"
+else
+    ok ".env ya existe"
 fi
 echo ""
 
-# ── llaves SSH ────────────────────────────────────────────────────────────────
+# ── compose ───────────────────────────────────────────────────────────────────
 
-echo "-- Llaves SSH --"
-if [ ! -f "$HOME/.ssh/id_rsa" ]; then
-    info "Generando par de llaves RSA..."
-    mkdir -p "$HOME/.ssh"
-    ssh-keygen -t rsa -b 4096 -f "$HOME/.ssh/id_rsa" -N ""
-    ok "Llave generada en ~/.ssh/id_rsa"
-else
-    ok "Llave SSH ya existe en ~/.ssh/id_rsa"
-fi
+echo "-- Levantando contenedores (build + up) --"
+cd "$SCRIPT_DIR"
+docker compose up -d --build
 echo ""
-
-# ── Python deps ───────────────────────────────────────────────────────────────
-
-echo "-- Dependencias Python --"
-if python3 -c "import paramiko" &>/dev/null; then
-    ok "paramiko ya instalado"
-else
-    pip3 install -r "$SCRIPT_DIR/requirements.txt" --quiet --break-system-packages
-    ok "Dependencias instaladas"
-fi
+docker compose ps
 echo ""
+LAB_STARTED=true
 
-# ── Docker (análisis estático) ────────────────────────────────────────────────
+# ── Kali (opcional) ──────────────────────────────────────────────────────────
 
-echo "-- Docker / Debian (análisis estático) --"
-CONTAINER=$(jq -r '.docker.container' "$CONFIG")
-PORT=$(jq -r '.docker.port'           "$CONFIG")
-USER=$(jq -r '.docker.user'           "$CONFIG")
-
-info "Construyendo imagen Docker..."
-docker build -t malware-debian "$SCRIPT_DIR/docker" -q
-ok "Imagen malware-debian lista"
-
-if ! docker inspect "$CONTAINER" &>/dev/null 2>&1; then
-    docker run -d --name "$CONTAINER" -p "$PORT:22" --restart always malware-debian
-    ok "Contenedor '$CONTAINER' creado"
-    sleep 2
-
-    # Crear usuario en el contenedor (solo si no es root)
-    if [ "$USER" != "root" ]; then
-        docker exec "$CONTAINER" useradd -m -s /bin/bash "$USER" 2>/dev/null || true
-        SSH_HOME="/home/$USER"
+echo "-- Kali Linux (análisis dinámico, opcional) --"
+echo "  La VM Kali queda fuera de Docker (necesita kernel propio)."
+echo ""
+read -rp "¿Configurar Kali ahora con Vagrant? [s/N]: " resp
+if [[ "$resp" =~ ^[Ss]$ ]]; then
+    if command -v vagrant &>/dev/null; then
+        vagrant up
+        KALI_STARTED=true
+        info "Copia la llave del lab: ssh-copy-id -i lab_keys/id_rsa.pub -p 2222 kali@127.0.0.1"
     else
-        SSH_HOME="/root"
+        warn "Vagrant no instalado: https://www.vagrantup.com/downloads"
     fi
-
-    # Copiar llave pública
-    docker exec -i "$CONTAINER" bash -c \
-        "mkdir -p $SSH_HOME/.ssh && \
-         cat >> $SSH_HOME/.ssh/authorized_keys && \
-         chown -R $USER:$USER $SSH_HOME/.ssh && \
-         chmod 700 $SSH_HOME/.ssh && \
-         chmod 600 $SSH_HOME/.ssh/authorized_keys" \
-        < "$HOME/.ssh/id_rsa.pub"
-    ok "Llave SSH copiada al contenedor"
 else
-    ok "Contenedor '$CONTAINER' ya existe"
+    info "Saltado. Para configurar luego: vagrant up"
 fi
 echo ""
-
-# ── Kali Linux (análisis dinámico) ────────────────────────────────────────────
-
-echo "-- Kali Linux (análisis dinámico) --"
-echo ""
-echo "  Elige cómo configurar tu VM Kali:"
-echo "  1) Vagrant (automático, recomendado para instalación nueva)"
-echo "  2) VirtualBox manual — importar .ova"
-echo "  3) VM ya existente — solo configurar SSH"
-echo "  4) Saltar"
-echo ""
-read -rp "Opción [1-4]: " opcion
-
-case "$opcion" in
-1)
-    if ! command -v vagrant &>/dev/null; then
-        warn "Vagrant no instalado. Descárgalo en: https://www.vagrantup.com/downloads"
-        exit 1
-    fi
-    info "Levantando VM Kali con Vagrant (puede tardar varios minutos)..."
-    cd "$SCRIPT_DIR"
-    vagrant up
-    ok "VM Kali lista"
-    ;;
-2)
-    echo ""
-    echo "  Pasos para importar el .ova:"
-    echo "  1. VirtualBox → Archivo → Importar servicio virtualizado → selecciona el .ova"
-    echo "  2. Configuración → Red → Adaptador 1 → Reenvío de puertos:"
-    echo "     Nombre: SSH | TCP | Puerto anfitrión: 2222 | Puerto invitado: 22"
-    echo "  3. Inicia la VM"
-    echo ""
-    read -rp "¿Copiar llave SSH a la VM ahora? [S/n]: " resp
-    if [[ "$resp" =~ ^[Ss]$|^$ ]]; then
-        KALI_HOST=$(jq -r '.kali.host' "$CONFIG")
-        KALI_PORT=$(jq -r '.kali.port' "$CONFIG")
-        KALI_USER=$(jq -r '.kali.user' "$CONFIG")
-        info "Copiando llave SSH a $KALI_USER@$KALI_HOST:$KALI_PORT..."
-        sshpass -p kali ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" \
-            -p "$KALI_PORT" -o StrictHostKeyChecking=no "$KALI_USER@$KALI_HOST"
-        ok "Llave copiada"
-    fi
-    ;;
-3)
-    KALI_HOST=$(jq -r '.kali.host' "$CONFIG")
-    KALI_PORT=$(jq -r '.kali.port' "$CONFIG")
-    KALI_USER=$(jq -r '.kali.user' "$CONFIG")
-    info "Asegúrate de que la VM tenga reenvío de puertos: host $KALI_PORT → guest 22"
-    info "Copiando llave SSH a $KALI_USER@$KALI_HOST:$KALI_PORT..."
-    sshpass -p kali ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" \
-        -p "$KALI_PORT" -o StrictHostKeyChecking=no "$KALI_USER@$KALI_HOST" || \
-        warn "No se pudo copiar la llave. Hazlo manualmente cuando la VM esté encendida."
-    ;;
-4)
-    info "Setup de Kali omitido"
-    ;;
-esac
 
 # ── resumen ───────────────────────────────────────────────────────────────────
 
-echo ""
+WEB_PORT=$(grep ^WEB_PORT "$ENV_FILE" | cut -d= -f2)
 echo "================================================="
 echo "  Setup completo"
 echo "================================================="
 echo ""
-echo "Comandos disponibles:"
-echo "  python3 lab.py docker status"
-echo "  python3 lab.py docker start"
-echo "  python3 lab.py kali start"
-echo "  python3 lab.py static hash /ruta/muestra.exe"
+echo "  Web    → http://localhost:${WEB_PORT:-8000}"
+echo "  Engine → http://localhost:8001 (API)"
 echo ""
-echo "Conectar manualmente:"
-echo "  bash docker/debian.sh    # shell en contenedor Debian"
-echo "  bash kali/kali.sh        # shell en Kali"
+echo "CLI:"
+echo "  python3 lab.py analyze /ruta/muestra"
+echo "  python3 lab.py list"
+echo ""
+echo "Útil:"
+echo "  docker compose logs -f engine"
+echo ""
+echo "  Ctrl+C para apagar y destruir los contenedores."
+echo "================================================="
+echo ""
+
+# Mantiene el script vivo; el trap de arriba hace el cleanup al salir.
+while true; do sleep 60; done

@@ -1,112 +1,152 @@
 #!/usr/bin/env python3
-"""Malware Lab — punto de entrada principal."""
+"""Malware Lab — CLI cliente HTTP del engine."""
+import os
+import subprocess
 import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+import requests
+
+ENGINE_URL   = os.environ.get("ENGINE_URL", "http://localhost:8001")
+COMPOSE_FILE = os.path.join(os.path.dirname(__file__), "docker-compose.yml")
 
 
 def usage():
-    print("""
-Uso: python3 lab.py <modulo> <comando> [args]
+    print(f"""
+Uso: python3 lab.py <comando> [args]
 
-  docker  start | stop | restart | pause | resume | status | logs
-  kali    start | stop | pause | resume  [vm_name]
-  static  hash | file | strings | entropy | ssdeep  <ruta_local>
+  up                             levanta los contenedores del lab
+  down                           destruye los contenedores (datos en volúmenes se conservan)
 
-Ejemplos:
-  python3 lab.py docker status
-  python3 lab.py docker start
-  python3 lab.py kali start
-  python3 lab.py static hash    /tmp/muestra.exe
-  python3 lab.py static file    /tmp/muestra.exe
-  python3 lab.py static strings /tmp/muestra.exe
-  python3 lab.py static entropy /tmp/muestra.exe
-  python3 lab.py static ssdeep  /tmp/muestra.exe
+  upload  <ruta_local>           sube una muestra al engine, devuelve sha256
+  list                           lista todas las muestras del historial
+  hash    <sha256>
+  file    <sha256>
+  strings <sha256> [min_len]
+  entropy <sha256>
+  ssdeep  <sha256>
+  exiftool <sha256>
+  readelf  <sha256>
+  analyze <ruta_local>           shorthand: upload + todos los análisis
+
+Engine: {ENGINE_URL}  (override con ENGINE_URL=...)
 """)
 
 
-if len(sys.argv) < 3:
-    usage()
-    sys.exit(1)
+def _upload(path):
+    with open(path, "rb") as f:
+        r = requests.post(
+            f"{ENGINE_URL}/samples",
+            files={"file": (os.path.basename(path), f)},
+            timeout=60,
+        )
+    r.raise_for_status()
+    return r.json()
 
-modulo  = sys.argv[1]
-comando = sys.argv[2]
-args    = sys.argv[3:]
 
-if modulo == "docker":
-    import docker.docker as mgr
-    cmds = {
-        "start":   mgr.iniciar,
-        "stop":    mgr.detener,
-        "restart": mgr.reiniciar,
-        "pause":   mgr.pausar,
-        "resume":  mgr.reanudar,
-        "status":  mgr.estado,
-        "logs":    mgr.logs,
-    }
-    if comando not in cmds:
-        print(f"[!] Comando desconocido: {comando}")
+def _get(path, **params):
+    r = requests.get(f"{ENGINE_URL}{path}", params=params, timeout=120)
+    r.raise_for_status()
+    return r.json()
+
+
+def _print_kv(label, value):
+    print(f"  {label:<10} {value}")
+
+
+def _compose(*args):
+    base = ["docker", "compose", "-f", COMPOSE_FILE]
+    result = subprocess.run(base + list(args))
+    sys.exit(result.returncode)
+
+
+def main():
+    if len(sys.argv) < 2:
         usage()
         sys.exit(1)
-    cmds[comando]()
 
-elif modulo == "kali":
-    from kali import api
-    api.run(comando, *args)
+    cmd  = sys.argv[1]
+    args = sys.argv[2:]
 
-elif modulo == "static":
-    import os
-    from docker.debian import (
-        conectar, hash_archivo,
-        file_archivo, strings_archivo, entropia_archivo, ssdeep_archivo,
-    )
-    from core.ssh import subir
-    if not args:
-        print("[!] Falta la ruta del archivo")
-        usage()
-        sys.exit(1)
-    local = args[0]
-    if not os.path.exists(local):
-        print(f"[!] Archivo local no encontrado: {local}")
-        sys.exit(1)
-    remoto = f"/tmp/{os.path.basename(local)}"
-    client = conectar()
-    subir(client, local, remoto)
-    if comando == "hash":
-        hashes = hash_archivo(client, remoto)
-        print(f"\nArchivo: {local}")
-        for alg, val in hashes.items():
-            print(f"  {alg:<8} {val}")
-    elif comando == "file":
-        resultado = file_archivo(client, remoto)
-        print(f"\nArchivo: {local}")
-        print(f"  {resultado}")
-    elif comando == "strings":
-        try:
-            raw = input("Longitud mínima de cadena [4]: ").strip()
-            min_len = int(raw) if raw else 4
-        except ValueError:
-            print("[!] Valor inválido, usando 4")
-            min_len = 4
-        resultado = strings_archivo(client, remoto, min_len)
-        print(f"\n--- strings (min={min_len}) en {local} ---")
-        print(resultado)
-    elif comando == "entropy":
-        resultado = entropia_archivo(client, remoto)
-        print(f"\nArchivo: {local}")
-        print(f"  Entropía: {resultado} bits/byte")
-    elif comando == "ssdeep":
-        resultado = ssdeep_archivo(client, remoto)
-        print(f"\nArchivo: {local}")
-        print(f"  ssdeep: {resultado}")
+    if cmd == "up":
+        _compose("up", "-d", "--build")
+
+    elif cmd == "down":
+        _compose("down")
+
+    elif cmd == "upload":
+        if not args:
+            usage(); sys.exit(1)
+        meta = _upload(args[0])
+        print(f"sha256:   {meta['sha256']}")
+        print(f"filename: {meta['filename']}")
+        print(f"size:     {meta['size']} B")
+
+    elif cmd == "list":
+        for s in _get("/samples"):
+            print(f"  {s['sha256']}  {s['filename']:<30}  {s['size']:>10} B  {s['uploaded_at']}")
+
+    elif cmd == "hash":
+        if not args: usage(); sys.exit(1)
+        for alg, val in _get(f"/samples/{args[0]}/hash").items():
+            _print_kv(alg, val)
+
+    elif cmd == "file":
+        if not args: usage(); sys.exit(1)
+        print(_get(f"/samples/{args[0]}/file")["file"])
+
+    elif cmd == "strings":
+        if not args: usage(); sys.exit(1)
+        min_len = int(args[1]) if len(args) > 1 else 4
+        for s in _get(f"/samples/{args[0]}/strings", min_len=min_len)["strings"]:
+            print(s)
+
+    elif cmd == "entropy":
+        if not args: usage(); sys.exit(1)
+        print(_get(f"/samples/{args[0]}/entropy")["entropy"], "bits/byte")
+
+    elif cmd == "ssdeep":
+        if not args: usage(); sys.exit(1)
+        print(_get(f"/samples/{args[0]}/ssdeep")["ssdeep"])
+
+    elif cmd == "exiftool":
+        if not args: usage(); sys.exit(1)
+        for key, val in _get(f"/samples/{args[0]}/exiftool").items():
+            _print_kv(key, val)
+
+    elif cmd == "readelf":
+        if not args: usage(); sys.exit(1)
+        print(_get(f"/samples/{args[0]}/readelf")["readelf"])
+
+    elif cmd == "analyze":
+        if not args: usage(); sys.exit(1)
+        meta = _upload(args[0])
+        sha  = meta["sha256"]
+        print(f"\n[+] {meta['filename']} → {sha}\n")
+        print("Hashes:")
+        for alg, val in _get(f"/samples/{sha}/hash").items():
+            _print_kv(alg, val)
+        _print_kv("File:",    _get(f"/samples/{sha}/file")["file"])
+        _print_kv("Entropy:", f"{_get(f'/samples/{sha}/entropy')['entropy']} bits/byte")
+        _print_kv("SSDeep:",  _get(f"/samples/{sha}/ssdeep")["ssdeep"])
+        print("\nExifTool:")
+        for key, val in _get(f"/samples/{sha}/exiftool").items():
+            _print_kv(key, val)
+        print(f"\nUsa 'lab.py strings {sha}' para ver strings.")
+        print(f"Usa 'lab.py readelf {sha}' para ver cabeceras ELF.")
+
     else:
-        print(f"[!] Comando desconocido: {comando}")
-        usage()
-        sys.exit(1)
-    client.close()
+        usage(); sys.exit(1)
 
-else:
-    print(f"[!] Módulo desconocido: {modulo}")
-    usage()
-    sys.exit(1)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except requests.HTTPError as e:
+        print(f"[!] HTTP {e.response.status_code}: {e.response.text}")
+        sys.exit(1)
+    except requests.ConnectionError:
+        print(f"[!] No se pudo conectar al engine ({ENGINE_URL}). ¿`docker compose up -d`?")
+        sys.exit(1)
+    except FileNotFoundError as e:
+        print(f"[!] {e}")
+        sys.exit(1)

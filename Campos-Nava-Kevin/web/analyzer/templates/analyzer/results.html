@@ -19,7 +19,11 @@
 </head>
 <body>
     <h1>{{ data.filename }}</h1>
-    <a href="/">← Analizar otro archivo</a>
+    <p>
+        <a href="/">← Analizar otro</a> &nbsp;|&nbsp;
+        <a href="/history/">Historial</a>
+    </p>
+    <p>SHA256: <code>{{ data.sha256 }}</code> &nbsp; <span class="value">{{ data.size }} B</span></p>
 
     <h2>Hashes</h2>
     <table>
@@ -36,6 +40,16 @@
 
     <h2>SSDeep</h2>
     <p><code>{{ data.ssdeep }}</code></p>
+
+    <h2>ExifTool</h2>
+    <table>
+        {% for key, val in data.exiftool.items %}
+        <tr><td>{{ key }}</td><td><code>{{ val }}</code></td></tr>
+        {% endfor %}
+    </table>
+
+    <h2>ReadELF</h2>
+    <pre>{{ data.readelf }}</pre>
 
     <h2>Strings ({{ data.strings|length }} encontradas)</h2>
     <pre>{% for s in data.strings %}{{ s }}

@@ -52,6 +52,27 @@ def entropia_archivo(client, ruta: str) -> str:
     return stdout.read().decode().strip() or stderr.read().decode().strip()
 
 
+def exiftool_archivo(client, ruta: str) -> dict:
+    _, stdout, stderr = client.exec_command(f"exiftool {ruta}")
+    stdout.channel.recv_exit_status()
+    out = stdout.read().decode().strip()
+    err = stderr.read().decode().strip()
+    if err and not out:
+        return {"ERROR": err}
+    result = {}
+    for line in out.splitlines():
+        if ":" in line:
+            key, _, val = line.partition(":")
+            result[key.strip()] = val.strip()
+    return result
+
+
+def readelf_archivo(client, ruta: str) -> str:
+    _, stdout, _ = client.exec_command(f"readelf -a {ruta} 2>&1")
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode(errors="replace").strip()
+
+
 def ssdeep_archivo(client, ruta: str) -> str:
     _, stdout, stderr = client.exec_command(f"ssdeep {ruta}")
     stdout.channel.recv_exit_status()

@@ -1,51 +1,86 @@
-version: '3.9'
-
 services:
 
-  debian:
+  sandbox:
     build: ./docker
-    container_name: debian
+    container_name: lab-sandbox
     networks:
-      - lab-net
-    ports:
-      - "2223:22"
+      - lab-sandbox
     volumes:
-      - ${HOME}/.ssh/id_rsa.pub:/tmp/authorized_keys:ro
+      - ./lab_keys/id_rsa.pub:/tmp/authorized_keys:ro
+      - samples:/samples
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep sshd >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: lab-db
+    networks:
+      - lab-frontend
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-lab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lab}
+      POSTGRES_DB:       ${POSTGRES_DB:-lab}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   engine:
     build:
       context: .
       dockerfile: engine/Dockerfile
-    container_name: engine
+    container_name: lab-engine
     networks:
-      - lab-net
+      - lab-frontend
+      - lab-sandbox
     ports:
-      - "8001:8001"
+      - "${ENGINE_PORT:-8001}:8001"
     volumes:
-      - ${HOME}/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+      - ./lab_keys/id_rsa:/keys/id_rsa:ro
+      - samples:/samples
     environment:
-      - DEBIAN_HOST=debian
-      - DEBIAN_PORT=22
-      - DEBIAN_USER=root
-      - KEY_PATH=/root/.ssh/id_rsa
+      SANDBOX_HOST: sandbox
+      SANDBOX_PORT: 22
+      SANDBOX_USER: root
+      KEY_PATH:     /keys/id_rsa
+      SAMPLES_DIR:  /samples
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lab}:${POSTGRES_PASSWORD:-lab}@db:5432/${POSTGRES_DB:-lab}
     depends_on:
-      - debian
+      sandbox:
+        condition: service_healthy
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
     build: ./web
-    container_name: web
+    container_name: lab-web
     networks:
-      - lab-net
+      - lab-frontend
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     environment:
-      - ENGINE_URL=http://engine:8001
+      ENGINE_URL: http://engine:8001
     depends_on:
       - engine
     restart: unless-stopped
 
 networks:
-  lab-net:
+  lab-frontend:
     driver: bridge
+  lab-sandbox:
+    driver: bridge
+    internal: true   # sandbox sin salida a internet ni al host
+
+volumes:
+  samples:
+  db-data:

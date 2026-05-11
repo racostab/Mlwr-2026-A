@@ -1,6 +1,9 @@
 config.json
 config_kali.ini
 config_debian.ini
+.env
+lab_keys/
+samples/
 
 .vagrant/
 *.pyc

@@ -6,7 +6,10 @@ def conectar(host: str, port: int, user: str, key_path: str, label: str = "host"
     key_path = os.path.expanduser(key_path)
     if not os.path.exists(key_path):
         raise FileNotFoundError(f"Llave SSH no encontrada: {key_path}")
-    os.chmod(key_path, 0o600)
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass  # llave montada read-only desde un volumen Docker
     key    = paramiko.RSAKey.from_private_key_file(key_path)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())

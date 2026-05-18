@@ -25,9 +25,9 @@ resume)
 
 *)
     echo "Uso:"
-    echo "./cli.sh start  NOMBRE_VM"
-    echo "./cli.sh stop   NOMBRE_VM"
-    echo "./cli.sh suspend NOMBRE_VM"
-    echo "./cli.sh resume NOMBRE_VM"
+    echo "./cli.sh start  debian"
+    echo "./cli.sh stop   debian"
+    echo "./cli.sh pause  debian"
+    echo "./cli.sh resume debian"
 ;;
 esac

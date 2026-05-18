@@ -1,0 +1,8 @@
+**/__pycache__/
+**/*.pyc
+.vagrant/
+lab_keys/
+samples/
+.env
+.git/
+.claude/

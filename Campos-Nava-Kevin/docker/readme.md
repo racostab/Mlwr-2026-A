@@ -1,57 +1,73 @@
-# Docker SSH - Debian
+# docker/ — Sandbox de análisis estático
 
-## Requisitos
-- Docker instalado
-- Python 3 con paramiko: `pip install paramiko`
-- sshpass: `sudo apt install sshpass`
+Define el contenedor `sandbox`: un Debian con las herramientas de análisis
+estático. El `engine` se conecta a él por SSH y ejecuta ahí los comandos.
 
-## Configuración inicial (solo una vez)
+Es el servicio `sandbox` de `docker-compose.yml`.
 
-### 1. Iniciar Docker
+## Aislamiento
+
+El `sandbox` está en la red Docker `lab-sandbox`, marcada como `internal`:
+**sin salida a internet ni acceso al host**. Solo el `engine` lo alcanza. Así una
+muestra maliciosa no puede "llamar a casa" durante el análisis.
+
+## La imagen
+
+### `Dockerfile`
+
+Parte de `debian:bookworm-slim` e instala las herramientas de análisis:
+
+| Paquete                  | Aporta                                   |
+|--------------------------|------------------------------------------|
+| `binutils`               | `strings`, `readelf`                     |
+| `file`                   | identificación de tipo de archivo        |
+| `bsdmainutils`           | `hexdump` y utilidades                   |
+| `ssdeep`                 | hashing difuso (*fuzzy hashing*)         |
+| `yara`                   | reglas de detección de patrones          |
+| `libimage-exiftool-perl` | `exiftool` (metadatos)                   |
+| `python3`, `procps`      | cálculo de entropía y utilidades         |
+
+Configura `sshd` para aceptar **solo autenticación por llave pública** (sin
+contraseñas) y login de `root`.
+
+### `entrypoint.sh`
+
+Al arrancar el contenedor, copia la llave pública del lab — montada en
+`/tmp/authorized_keys` desde `lab_keys/id_rsa.pub` — a
+`/root/.ssh/authorized_keys`. Así el `engine` puede entrar por SSH.
+
+## Scripts
+
+### `debian.py` — funciones de análisis
+
+Cada función ejecuta un comando dentro del sandbox por SSH y parsea su salida:
+
+| Función              | Herramienta        |
+|----------------------|--------------------|
+| `hash_archivo`       | `md5sum` / `sha1sum` / `sha256sum` |
+| `file_archivo`       | `file`             |
+| `strings_archivo`    | `strings -n`       |
+| `entropia_archivo`   | cálculo en Python (entropía de Shannon) |
+| `exiftool_archivo`   | `exiftool`         |
+| `readelf_archivo`    | `readelf -a`       |
+| `ssdeep_archivo`     | `ssdeep`           |
+
+El `engine` importa estas funciones (el `engine/Dockerfile` copia este archivo
+dentro de su imagen). También se puede correr suelto:
+`python3 debian.py hash /ruta/muestra` (usa `config.json`).
+
+### `debian.sh` — shell interactiva
+
+Abre una shell dentro del sandbox en marcha:
+
 ```bash
-sudo systemctl start docker
+bash docker/debian.sh   # → docker compose exec sandbox bash
 ```
 
-### 2. Construir la imagen
-```bash
-docker build -t mi-debian .
-```
+### `docker.py` — control de contenedor *(utilidad standalone)*
 
-### 3. Crear el contenedor
-```bash
-docker run -d --name debian -p 2223:22 --restart always mi-debian
-```
+Inicia / detiene / inspecciona un contenedor por nombre (tomado de
+`config.json`): `python3 docker.py start|stop|status|logs|...`.
 
-### 4. Crear usuario dentro del contenedor
-```bash
-docker exec -it debian bash
-useradd -m -s /bin/bash tu_usuario
-passwd tu_usuario
-exit
-```
-
-### 5. Crear config_debian.ini en la misma ruta
-```ini
-[debian]
-host     = 127.0.0.1
-port     = 2223
-user     = tu_usuario
-password = tu_contraseña
-```
-
-### 6. Generar llaves SSH (si no tienes)
-```bash
-ssh-keygen -t rsa -b 4096
-```
-
-### 7. Copiar llave pública al contenedor (solo una vez)
-```bash
-sshpass -p tu_contraseña ssh-copy-id -i ~/.ssh/id_rsa.pub -p 2223 -o StrictHostKeyChecking=no tu_usuario@127.0.0.1
-```
-
-## Uso diario
-```bash
-bash debian.sh
-# o
-python3 debian.py
-```
+> Es una herramienta independiente, **no la usa** el flujo de Compose. Con
+> Compose el contenedor se gestiona con `lab.py up` / `lab.py down`.

@@ -1,29 +1,65 @@
 # Malware Lab — Campos Nava Kevin Eduardo
 
-Laboratorio de análisis de malware con dos entornos aislados:
+Laboratorio de análisis de malware. Subes una muestra y obtienes su **análisis
+estático** (hashes, strings, entropía, info de archivo, etc.) ejecutado dentro de
+un sandbox aislado. Para **análisis dinámico** hay una VM Kali aparte.
 
-| Entorno | Tecnología | Uso |
-|---|---|---|
-| **Debian** | Docker | Análisis estático (hashes, strings, info) |
-| **Kali Linux** | VirtualBox / Vagrant | Análisis dinámico (strace, tcpdump, gdb) |
+## Arquitectura
 
-La comunicación con ambos entornos es por SSH usando llave pública.
+Todo el análisis estático corre en Docker Compose (4 servicios). La VM Kali queda
+fuera de Docker porque necesita su propio kernel.
+
+```
+                    ┌──────────┐
+   navegador ─────▶ │   web    │  Django UI            :8000
+                    └────┬─────┘
+                         │ HTTP
+   CLI (lab.py) ────────▶│
+                         ▼
+                    ┌──────────┐        ┌──────────┐
+                    │  engine  │ ◀────▶ │    db    │  PostgreSQL
+                    │ REST API │        └──────────┘
+                    │   :8001  │
+                    └────┬─────┘
+                         │ SSH  (red interna: sin internet, sin host)
+                         ▼
+                    ┌──────────┐
+                    │ sandbox  │  Debian + binutils, file, ssdeep,
+                    │          │  yara, exiftool, readelf...
+                    └──────────┘
+
+   ── aparte, fuera de Docker ──
+                    ┌──────────┐
+                    │   Kali   │  VM VirtualBox — análisis dinámico
+                    └──────────┘
+```
+
+| Servicio | Tecnología     | Puerto         | Rol                                            |
+|----------|----------------|----------------|------------------------------------------------|
+| `web`    | Django         | 8000           | Interfaz para subir muestras y ver resultados  |
+| `engine` | FastAPI        | 8001           | API REST: orquesta el análisis y cachea reportes |
+| `db`     | PostgreSQL 16  | interno        | Historial de muestras y reportes               |
+| `sandbox`| Debian slim    | interno        | Ejecuta las herramientas de análisis estático  |
+| Kali     | VirtualBox     | 2222 (SSH)     | Análisis dinámico (strace, gdb, tcpdump...)     |
+
+> El `sandbox` está en una red Docker `internal`: no tiene salida a internet ni
+> acceso al host. Solo el `engine` puede hablar con él.
+
+---
+
+## Requisitos
+
+| Herramienta            | Para qué                            | Instalación                                 |
+|------------------------|-------------------------------------|----------------------------------------------|
+| Docker + Compose v2    | Levantar el lab                     | https://docs.docker.com/engine/install/      |
+| `ssh-keygen`           | Generar las llaves del lab          | paquete `openssh-client`                     |
+| Python 3 + `requests`  | Usar la CLI `lab.py`                | `pip install -r requirements.txt`            |
+| VirtualBox + Vagrant   | Análisis dinámico *(opcional)*      | https://www.vagrantup.com/downloads          |
+| `jq`                   | `kali/kali.sh` *(opcional)*         | `sudo apt install jq`                        |
 
 ---
 
 ## Instalación
-
-### 1. Requisitos previos
-
-| Herramienta | Instalación |
-|---|---|
-| Python 3 | — |
-| Docker | https://docs.docker.com/engine/install/ |
-| jq | `sudo apt install jq` |
-| Vagrant *(opcional)* | https://www.vagrantup.com/downloads |
-| VirtualBox | https://www.virtualbox.org/ |
-
-### 2. Setup automático
 
 ```bash
 git clone <repo>
@@ -31,125 +67,108 @@ cd Campos-Nava-Kevin
 bash setup.sh
 ```
 
-El script:
-- Crea `config.json` desde la plantilla
-- Genera llaves SSH si no existen
-- Instala dependencias Python
-- Construye y configura el contenedor Debian
-- Te guía para configurar Kali (3 opciones)
+`setup.sh` hace todo el arranque:
+
+- Genera el par de llaves SSH **del lab** en `lab_keys/` (propias del lab, no las tuyas).
+- Crea `.env` a partir de `.env.example`.
+- Construye y levanta los contenedores (`docker compose up -d --build`).
+- Pregunta si quieres configurar Kali con Vagrant.
+- Se queda en primer plano: **Ctrl+C apaga y destruye los contenedores** (los
+  datos en volúmenes se conservan).
+
+Al terminar:
+
+- Web → http://localhost:8000
+- API → http://localhost:8001
 
 ---
 
-## Configuración
+## Configuración — `.env`
 
-Copia la plantilla y edita los valores:
+`.env` lo crea `setup.sh` y está en `.gitignore`. Controla puertos y credenciales
+de la base de datos:
 
-```bash
-cp config.example.json config.json
+```
+WEB_PORT=8000
+ENGINE_PORT=8001
+POSTGRES_USER=lab
+POSTGRES_PASSWORD=lab
+POSTGRES_DB=lab
 ```
 
-```json
-{
-  "docker": {
-    "container": "malware-debian",
-    "host": "127.0.0.1",
-    "port": 2223,
-    "user": "kevin",
-    "key_path": "~/.ssh/id_rsa"
-  },
-  "kali": {
-    "host": "127.0.0.1",
-    "port": 2222,
-    "user": "kali",
-    "key_path": "~/.ssh/id_rsa",
-    "vm_name": "kali-malware-lab"
-  }
-}
-```
-
-> `config.json` está en `.gitignore` — nunca se sube al repo.
+> `config.example.json` / `config.json` es una configuración aparte que **solo**
+> usa la parte de Kali (ver `kali/readme.md`). El análisis estático no lo necesita.
 
 ---
 
 ## Uso
 
-### CLI principal
+### Interfaz web
+
+Abre http://localhost:8000, sube una muestra y mira el reporte. La pestaña
+*History* lista todo lo analizado.
+
+### CLI — `lab.py`
+
+La CLI es un cliente HTTP del `engine`.
 
 ```bash
-python3 lab.py docker status
-python3 lab.py docker start
-python3 lab.py kali start
-
-python3 lab.py static hash    /tmp/muestra.exe
-python3 lab.py static strings /tmp/muestra.exe
-python3 lab.py static info    /tmp/muestra.exe
+python3 lab.py up                      # levanta los contenedores
+python3 lab.py analyze /ruta/muestra   # sube + análisis completo
+python3 lab.py list                    # historial de muestras
+python3 lab.py down                    # apaga los contenedores
 ```
 
-### Conectar shell interactiva
+Análisis individual sobre una muestra ya subida (identificada por su `sha256`):
 
 ```bash
-bash docker/debian.sh   # shell en Debian
-bash kali/kali.sh       # shell en Kali
+python3 lab.py upload   /ruta/muestra   # devuelve el sha256
+python3 lab.py hash     <sha256>
+python3 lab.py file     <sha256>
+python3 lab.py strings  <sha256> [min_len]
+python3 lab.py entropy  <sha256>
+python3 lab.py ssdeep   <sha256>
+python3 lab.py exiftool <sha256>
+python3 lab.py readelf  <sha256>
 ```
 
----
+Con `ENGINE_URL=http://otro-host:8001 python3 lab.py ...` apuntas a otra instancia.
 
-## Kali Linux — Opciones de configuración
-
-### Opción 1: Vagrant (recomendado)
-
-Levanta automáticamente una VM Kali con herramientas preinstaladas:
+### Shell dentro de los entornos
 
 ```bash
-vagrant up          # primera vez (descarga el box ~3 GB)
-vagrant halt        # apagar
-vagrant up          # encender de nuevo
-vagrant destroy     # eliminar la VM
-```
-
-### Opción 2: VirtualBox manual con .ova
-
-1. `VirtualBox → Archivo → Importar servicio virtualizado`
-2. Configurar reenvío de puertos: **host 2222 → guest 22**
-3. Iniciar la VM
-4. Copiar llave SSH:
-   ```bash
-   sshpass -p kali ssh-copy-id -i ~/.ssh/id_rsa.pub -p 2222 -o StrictHostKeyChecking=no kali@127.0.0.1
-   ```
-
-### Opción 3: VM ya existente
-
-Solo necesitas configurar el reenvío de puertos y copiar la llave:
-
-```bash
-ssh-copy-id -i ~/.ssh/id_rsa.pub -p 2222 kali@127.0.0.1
+bash docker/debian.sh   # shell interactiva en el sandbox
+bash kali/kali.sh       # SSH a la VM Kali
 ```
 
 ---
 
-## Estructura del proyecto
+## Análisis dinámico — Kali
+
+Es una VM independiente (necesita su propio kernel, no va en Docker). El detalle
+está en `kali/readme.md` y `vagrant/readme.md`.
+
+---
+
+## Estructura
 
 ```
 Campos-Nava-Kevin/
-├── config.json          # configuración local (gitignored)
-├── config.example.json  # plantilla de configuración
-├── requirements.txt
-├── setup.sh             # instalación automatizada
-├── lab.py               # CLI principal
-├── Vagrantfile          # VM Kali vía Vagrant
-├── vagrant/
-│   └── provision_kali.sh
-├── core/
-│   ├── config.py        # lector de config.json
-│   └── ssh.py           # helper SSH compartido
-├── docker/
-│   ├── Dockerfile
-│   ├── debian.py        # análisis estático vía SSH
-│   ├── docker.py        # gestión del contenedor
-│   └── debian.sh        # shell interactiva
-└── kali/
-    ├── kali.py          # conexión SSH a Kali
-    ├── api.py           # control VM vía vboxapi
-    ├── kali.sh          # shell interactiva
-    └── cli.sh           # control VM vía VBoxManage
+├── docker-compose.yml      orquesta los 4 servicios
+├── setup.sh                instalación y arranque del lab
+├── lab.py                  CLI cliente del engine
+├── .env.example            plantilla de variables de entorno
+├── config.example.json     plantilla de config (solo Kali)
+├── requirements.txt        dependencias de la CLI
+├── Vagrantfile             definición de la VM Kali
+├── lab_keys/               llaves SSH del lab (gitignored)
+├── core/      →  módulos compartidos (SSH, config)      · core/readme.md
+├── db/        →  esquema PostgreSQL                     · db/readme.md
+├── docker/    →  imagen del sandbox de análisis         · docker/readme.md
+├── engine/    →  API REST (FastAPI)                     · engine/readme.md
+├── kali/      →  control de la VM Kali                  · kali/readme.md
+├── vagrant/   →  provisioning de Kali                   · vagrant/readme.md
+└── web/       →  interfaz web (Django)                  · web/readme.md
 ```
+
+Cada carpeta tiene su propio `readme.md` con el detalle de qué hace y cómo.

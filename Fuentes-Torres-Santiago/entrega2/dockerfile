@@ -1,0 +1,85 @@
+# ============================================================
+#  Dockerfile  —  Laboratorio de Análisis Estático
+#  Imagen base: debian:bookworm-slim
+#
+#  Herramientas incluidas:
+#    - Python 3
+#    - file        — detección de tipo de archivo
+#    - exiftool    — metadata de archivos
+#    - strings     — cadenas de binarios (binutils)
+#    - ssdeep      — fuzzy hashing nativo
+#
+#  Construir:
+#    docker build -t lab-malware .
+#
+#  Ejecutar:
+#    docker run -it --name ciber-lab lab-malware
+#    docker run -it -v C:\muestras:/muestras lab-malware
+# ============================================================
+
+FROM debian:bookworm-slim
+
+# ── Metadata ─────────────────────────────────────────────────
+LABEL maintainer="Fuentes-Torres-Santiago"
+LABEL descripcion="Laboratorio de Análisis Estático de Malware"
+LABEL version="1.0"
+
+# ── Variables de entorno ──────────────────────────────────────
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8
+ENV LAB_DIR=/laboratorio
+ENV MUESTRAS_DIR=/muestras
+
+# ── Instalar herramientas ─────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python
+    python3 \
+    python3-pip \
+    # Detección de tipo de archivo
+    file \
+    # Metadata
+    libimage-exiftool-perl \
+    # Cadenas de binarios
+    binutils \
+    # Fuzzy hashing
+    ssdeep \
+    # Utilidades generales
+    curl \
+    wget \
+    ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Crear estructura de directorios ──────────────────────────
+RUN mkdir -p $LAB_DIR/modulos \
+    && mkdir -p $MUESTRAS_DIR \
+    && mkdir -p $LAB_DIR/resultados \
+    && mkdir -p $LAB_DIR/experimentos
+
+# ── Copiar módulos de análisis ────────────────────────────────
+COPY modulos/hashes.py        $LAB_DIR/modulos/hashes.py
+COPY modulos/entropia.py      $LAB_DIR/modulos/entropia.py
+COPY modulos/tipo_archivo.py  $LAB_DIR/modulos/tipo_archivo.py
+COPY modulos/cadenas.py       $LAB_DIR/modulos/cadenas.py
+COPY modulos/ssdeep.py        $LAB_DIR/modulos/ssdeep.py
+
+# ── Copiar laboratorio principal ──────────────────────────────
+COPY laboratorio.py           $LAB_DIR/laboratorio.py
+
+# ── Crear __init__.py para que modulos sea un paquete ─────────
+RUN touch $LAB_DIR/modulos/__init__.py
+
+# ── Directorio de trabajo ─────────────────────────────────────
+WORKDIR $LAB_DIR
+
+# ── Verificar instalación ─────────────────────────────────────
+RUN echo "=== Verificando herramientas ===" \
+    && python3 --version \
+    && file --version \
+    && exiftool -ver \
+    && strings --version \
+    && ssdeep -V \
+    && echo "=== Todo instalado correctamente ==="
+
+# ── Punto de entrada ──────────────────────────────────────────
+CMD ["/bin/bash"]

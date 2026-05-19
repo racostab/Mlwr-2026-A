@@ -1,0 +1,9 @@
+HOLA ESTO ES UNA PRUEBA DE LOS ANALISIS ESTATICOS
+
+#include <stdio.h> // Biblioteca estándar para entrada y salida
+
+int main() {
+    // printf imprime el texto en la consola
+    printf("Hola, mundo!\n");
+    return 0; // Indica que el programa finalizó correctamente
+}

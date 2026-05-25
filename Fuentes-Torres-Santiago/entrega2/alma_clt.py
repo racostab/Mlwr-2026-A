@@ -6,7 +6,6 @@
 #  Uso:
 #    python alma_clt.py analizar [archivo]
 #    python alma_clt.py analizar [archivo] --modo docker
-#    python alma_clt.py analizar [archivo] --modo local
 #    python alma_clt.py vm      [cmd] [vm]
 #    python alma_clt.py docker  [cmd]
 #    python alma_clt.py ping

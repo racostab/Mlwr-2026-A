@@ -1,14 +1,5 @@
-markdown# Laboratorio de Análisis Estático de Malware
+
 **Fuentes Torres Santiago — Mlwr-2026-A**
-
----
-
-## Descripción
-
-Laboratorio de análisis estático de archivos sospechosos.
-Arquitectura cliente-servidor donde el servidor automatiza
-el levantamiento de Docker y ejecuta el análisis en un
-contenedor aislado.
 
 ---
 

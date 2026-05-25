@@ -1,53 +1,92 @@
-# SSH Automation - Kali Linux (VirtualBox)
+# kali/ — Análisis dinámico (VM Kali)
 
-## Requisitos
-- VirtualBox instalado
-- Python 3
-- paramiko: `pip install paramiko`
-- sshpass: `sudo apt install sshpass`
-- OpenSSH: `sudo apt install openssh-client`
+Mientras el `sandbox` de Docker hace análisis **estático**, esta VM Kali sirve
+para análisis **dinámico**: ejecutar la muestra y observar su comportamiento
+(`strace`, `ltrace`, `gdb`, `tcpdump`, `tshark`, `binwalk`...).
 
-## Configuración inicial (solo una vez)
+Va en una VM de VirtualBox y **no** en Docker, porque el análisis dinámico
+necesita un kernel propio aislado.
 
-### 1. Importar la VM
-Abre VirtualBox → Archivo → Importar servicio virtualizado → selecciona el `.ova`
+## Conexión
 
-### 2. Configurar reenvío de puertos
-En VirtualBox con la VM apagada:
-1. Selecciona la VM → Configuración → Red → Adaptador 1 → Avanzado → Reenvío de puertos
-2. Agrega esta regla:
+La VM expone SSH en el **puerto 2222 del host** (→ 22 de la VM). Los datos de
+conexión están en `config.json` (raíz del proyecto), bloque `kali`:
 
-| Nombre | Protocolo | Puerto anfitrión | Puerto invitado |
-|--------|-----------|------------------|-----------------|
-| SSH    | TCP       | 2222             | 22              |
+```json
+"kali": {
+  "host": "127.0.0.1",
+  "port": 2222,
+  "user": "kali",
+  "key_path": "~/.ssh/id_rsa",
+  "vm_name": "kali-malware-lab"
+}
+```
 
-### 3. Iniciar la VM
-Arranca Kali desde VirtualBox.
+> Copia `config.example.json` → `config.json` si aún no existe. `config.json`
+> está en `.gitignore`.
 
-### 4. Generar llaves SSH (si no tienes)
+## Cómo levantar la VM
+
+### Opción A — Vagrant *(recomendada)*
+
+Automatiza todo. Ver `vagrant/readme.md`.
+
 ```bash
-ssh-keygen -t rsa -b 4096
+vagrant up        # primera vez descarga el box (~3 GB)
+vagrant halt      # apagar
+vagrant destroy   # eliminar
 ```
 
-### 5. Copiar llave pública a Kali
+Vagrant instala tu llave pública `~/.ssh/id_rsa.pub` dentro de la VM, que es la
+que espera `config.json` por defecto (`key_path: ~/.ssh/id_rsa`).
+
+### Opción B — VirtualBox manual (`.ova`)
+
+1. VirtualBox → *Archivo → Importar servicio virtualizado* → selecciona el `.ova`.
+2. Con la VM apagada: *Configuración → Red → Adaptador 1 → Avanzado → Reenvío de
+   puertos*. Agrega la regla:
+
+   | Nombre | Protocolo | Puerto anfitrión | Puerto invitado |
+   |--------|-----------|------------------|-----------------|
+   | SSH    | TCP       | 2222             | 22              |
+
+3. Inicia la VM.
+4. Copia tu llave pública (genera una con `ssh-keygen -t rsa -b 4096` si no
+   tienes):
+
+   ```bash
+   sshpass -p kali ssh-copy-id -i ~/.ssh/id_rsa.pub -p 2222 \
+       -o StrictHostKeyChecking=no kali@127.0.0.1
+   ```
+
+## Scripts
+
+### `kali.sh` — shell SSH a la VM
+
+Abre una sesión SSH leyendo los datos de `config.json` (necesita `jq`):
+
 ```bash
-sshpass -p kali ssh-copy-id -i ~/.ssh/id_rsa.pub -p 2222 -o StrictHostKeyChecking=no kali@127.0.0.1
+bash kali/kali.sh
 ```
 
-### 6. Crear config_kali.ini
-```ini
-[kali]
-host = 127.0.0.1
-port = 2222
-user = kali
-```
+### `cli.sh` — control de la VM con `VBoxManage`
 
-## Uso
+Enciende/apaga la VM usando la CLI de VirtualBox:
+
 ```bash
-python3 kali.py
+./cli.sh start   <vm_name>
+./cli.sh stop    <vm_name>
+./cli.sh suspend <vm_name>
+./cli.sh resume  <vm_name>
 ```
 
-## Notas
-- `config_kali.ini` está en `.gitignore`, no se sube al repo
-- La contraseña por defecto de Kali es `kali`
-- La VM debe estar corriendo antes de ejecutar el script
+### `api.py` — control de la VM con el SDK de VirtualBox
+
+Lo mismo que `cli.sh`, pero por la API de Python (`vboxapi`):
+
+```bash
+python3 api.py start|stop|pause|resume [vm_name]
+```
+
+Si `vboxapi` no está instalado, avisa y sugiere usar `cli.sh`. El `vm_name` por
+defecto sale de `config.json`.

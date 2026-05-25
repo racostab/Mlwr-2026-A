@@ -1,12 +1,15 @@
-
+# ALMA — Malware Lab Analyzer
 **Fuentes Torres Santiago — Mlwr-2026-A**
 
 ---
 
 ## Estructura del proyecto
+
+```
 entrega2/
 ├── alma_srv.py          Servidor del laboratorio
 ├── alma_clt.py          Cliente CLI
+├── alma_gui.py          Cliente GUI  ← rediseñado v2.0
 ├── config.py            Configuración global
 ├── laboratorio.py       Análisis estático integrado
 ├── Dockerfile           Imagen del contenedor de análisis
@@ -20,6 +23,7 @@ entrega2/
 │
 ├── experimentos/        Archivos a analizar (colocar aquí)
 └── resultados/          Resultados generados
+```
 
 ---
 
@@ -65,7 +69,30 @@ Mantenerlo corriendo en una terminal aparte.
 
 ---
 
-### Analizar un archivo
+### Interfaz gráfica (recomendada)
+```bash
+python alma_gui.py
+```
+
+La GUI incluye cuatro secciones principales accesibles desde el sidebar:
+
+| Sección | Función |
+|---------|---------|
+| ANÁLISIS | Seleccionar y analizar archivos o carpetas completas |
+| VIRTUALBOX | Controlar la VM (list, start, stop, status) |
+| DOCKER | Controlar contenedores (list, start, stop, logs) |
+| SERVIDOR | Verificar conexión con alma_srv.py vía ping |
+
+Características visuales:
+- Indicador LED animado del estado del servidor (verde = activo, rojo parpadeante = sin conexión)
+- Barra de progreso animada durante operaciones
+- Coloreo automático del output (errores en rojo, OK en verde, secciones en azul)
+- Reloj en tiempo real en la barra de estado
+- Botones con feedback visual al hover y al presionar
+
+---
+
+### Analizar un archivo (CLI)
 ```bash
 python alma_clt.py analizar [archivo]
 ```
@@ -76,10 +103,7 @@ El archivo puede ser:
 
 **Ejemplos:**
 ```bash
-# Archivo en experimentos/
 python alma_clt.py analizar malware.exe
-
-# Ruta completa
 python alma_clt.py analizar C:\muestras\sospechoso.exe
 ```
 
@@ -106,34 +130,35 @@ python alma_clt.py analizar-dir [carpeta]
 
 **Ejemplos:**
 ```bash
-# Carpeta en experimentos/
 python alma_clt.py analizar-dir experimentos
-
-# Carpeta específica
 python alma_clt.py analizar-dir C:\muestras
 ```
 
-Al finalizar todos los análisis, compara automáticamente
-la similitud entre todos los archivos usando ssdeep:
+Al finalizar, compara automáticamente la similitud entre todos
+los archivos usando ssdeep:
+
+```
 COMPARACIÓN DE SIMILITUD (SSDEEP)
 archivo1.exe  vs  archivo2.exe
-Similitud: 87%  —  ⚠ MUY SIMILARES — posible variante
+Similitud: 87%  ·  ⚠ POSIBLE VARIANTE
+```
 
 **Niveles de alerta:**
+
 | Similitud | Nivel |
 |-----------|-------|
-| 80-100%   | ⚠ MUY SIMILARES — posible variante de malware |
+| 80-100%   | ⚠ POSIBLE VARIANTE — revisar con atención |
 | 50-79%    | ~ PARCIALMENTE SIMILARES |
-| 0-49%     | OK — archivos diferentes |
+| 0-49%     | ✓ DIFERENTES |
 
 ---
 
 ### Controlar VirtualBox
 ```bash
 python alma_clt.py vm list
-python alma_clt.py vm start ciber
-python alma_clt.py vm stop  ciber
-python alma_clt.py vm pause ciber
+python alma_clt.py vm start  ciber
+python alma_clt.py vm stop   ciber
+python alma_clt.py vm pause  ciber
 python alma_clt.py vm resume ciber
 python alma_clt.py vm status ciber
 ```
@@ -155,9 +180,11 @@ python alma_clt.py ping
 ---
 
 ## Flujo completo
+
+```
 Windows
 │
-├── alma_clt.py analizar archivo.exe
+├── alma_gui.py  /  alma_clt.py analizar archivo.exe
 │       │
 │       └── alma_srv.py (localhost:9999)
 │               │
@@ -166,9 +193,10 @@ Windows
 │               ├── Copia archivo → contenedor
 │               ├── Ejecuta: file, exiftool, strings, ssdeep, python
 │               ├── Elimina archivo del contenedor
-│               └── Regresa resultados → alma_clt.py
+│               └── Regresa resultados
 │
-└── Resultado mostrado en pantalla
+└── Resultado mostrado en pantalla / GUI
+```
 
 ---
 
@@ -189,7 +217,7 @@ Editar `config.py` para cambiar:
 
 ## Módulos independientes
 
-Cada módulo puede usarse por separado:
+Cada módulo puede usarse por separado sin necesidad del servidor:
 
 ```bash
 python modulos/hashes.py       archivo.exe
@@ -206,7 +234,17 @@ python modulos/ssdeep.py       --dir carpeta/
 
 | Prototipo | Descripción | Estado |
 |-----------|-------------|--------|
-| P1 | Contenedores + Cliente/Servidor | ✅ |
-| P2 | Estructura de carpetas y config | ✅ |
-| P3 | Análisis Estático / Docker | ✅ |
+| P1 | Contenedores + Cliente/Servidor | ✅ Completo |
+| P2 | Estructura de carpetas y config | ✅ Completo |
+| P3 | Análisis Estático / Docker | ✅ Completo |
 | P4 | Análisis Dinámico / Hipervisor | ⏳ Pendiente |
+
+---
+
+## Notas importantes
+
+1. `alma_srv.py` debe estar corriendo antes de usar la GUI o el cliente CLI.
+2. Docker Desktop debe estar abierto y corriendo antes de cualquier análisis.
+3. La imagen `lab-malware` debe construirse una sola vez con `docker build`.
+4. Los archivos a analizar pueden colocarse en `experimentos/` o pasarse con ruta completa.
+5. El análisis siempre ocurre dentro del contenedor Docker — el host nunca ejecuta las muestras.

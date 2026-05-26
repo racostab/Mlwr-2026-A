@@ -1,3 +1,4 @@
+
 CREATE TABLE IF NOT EXISTS samples (
     sha256      TEXT PRIMARY KEY,
     filename    TEXT NOT NULL,

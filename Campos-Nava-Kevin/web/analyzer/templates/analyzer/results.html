@@ -1,58 +1,166 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resultados — {{ data.filename }}</title>
-    <style>
-        body { font-family: monospace; max-width: 900px; margin: 60px auto; padding: 0 20px; background: #1a1a1a; color: #e0e0e0; }
-        h1 { color: #00ff88; }
-        h2 { color: #00aaff; border-bottom: 1px solid #333; padding-bottom: 6px; }
-        a { color: #00ff88; }
-        table { width: 100%; border-collapse: collapse; }
-        td { padding: 6px 12px; border: 1px solid #333; }
-        td:first-child { color: #aaa; width: 100px; }
-        code { color: #ffcc00; word-break: break-all; }
-        pre { background: #2a2a2a; padding: 12px; overflow-x: auto; max-height: 400px; font-size: 0.85rem; line-height: 1.4; }
-        .value { color: #00ff88; }
-    </style>
-</head>
-<body>
-    <h1>{{ data.filename }}</h1>
-    <p>
-        <a href="/">← Analizar otro</a> &nbsp;|&nbsp;
-        <a href="/history/">Historial</a>
-    </p>
-    <p>SHA256: <code>{{ data.sha256 }}</code> &nbsp; <span class="value">{{ data.size }} B</span></p>
+{% extends 'analyzer/base.html' %}
 
-    <h2>Hashes</h2>
-    <table>
-        {% for alg, val in data.hash.items %}
-        <tr><td>{{ alg }}</td><td><code>{{ val }}</code></td></tr>
-        {% endfor %}
-    </table>
+{% block title %}{{ data.filename }} · Reporte · Malware Lab{% endblock %}
 
-    <h2>Tipo de archivo</h2>
-    <p class="value">{{ data.file }}</p>
+{% block content %}
+<header class="report-head">
+  <div class="report-head__main">
+    <p class="report-head__eyebrow">Reporte de análisis</p>
+    <h1 class="report-head__title">{{ data.filename }}</h1>
+    <button class="sha-chip" type="button" data-copy="{{ data.sha256 }}"
+            aria-label="Copiar hash SHA-256">
+      <span class="sha-chip__label">SHA-256</span>
+      <span class="sha-chip__value mono">{{ data.sha256 }}</span>
+      <span class="sha-chip__icon" aria-hidden="true">
+        <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6 9 17l-5-5"/>
+        </svg>
+      </span>
+    </button>
+  </div>
+  <a class="btn btn--ghost" href="{% url 'index' %}">Analizar otra</a>
+</header>
 
-    <h2>Entropía</h2>
-    <p class="value">{{ data.entropy }} bits/byte</p>
+<section class="stats" aria-label="Resumen de la muestra">
+  <div class="stat">
+    <span class="stat__label">Tipo de archivo</span>
+    <span class="stat__value stat__value--text">{{ data.file }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat__label">Entropía</span>
+    <span class="stat__value">{{ data.entropy }} <span class="stat__unit">bits/byte</span></span>
+    <div class="meter" data-entropy="{{ data.entropy }}">
+      <div class="meter__track"><div class="meter__fill"></div></div>
+    </div>
+    <span class="stat__sub" data-entropy-note>Escala 0–8</span>
+  </div>
+  <div class="stat">
+    <span class="stat__label">Tamaño</span>
+    <span class="stat__value">{{ data.size|filesizeformat }}</span>
+    <span class="stat__sub">{{ data.size }} bytes</span>
+  </div>
+  {% if data.ran_strings %}
+  <div class="stat">
+    <span class="stat__label">Strings</span>
+    <span class="stat__value">{{ data.strings|length }}</span>
+    <span class="stat__sub">cadenas extraídas</span>
+  </div>
+  {% endif %}
+</section>
 
-    <h2>SSDeep</h2>
-    <p><code>{{ data.ssdeep }}</code></p>
+<div class="panel">
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Secciones del reporte">
+      <button class="tab is-active" type="button" role="tab" data-tab
+              id="tab-hashes" aria-controls="panel-hashes" aria-selected="true">Hashes</button>
+      <button class="tab" type="button" role="tab" data-tab tabindex="-1"
+              id="tab-meta" aria-controls="panel-meta" aria-selected="false">Metadatos</button>
+      {% if data.ran_ssdeep %}
+      <button class="tab" type="button" role="tab" data-tab tabindex="-1"
+              id="tab-ssdeep" aria-controls="panel-ssdeep" aria-selected="false">Fuzzy hash</button>
+      {% endif %}
+      {% if data.ran_strings %}
+      <button class="tab" type="button" role="tab" data-tab tabindex="-1"
+              id="tab-strings" aria-controls="panel-strings" aria-selected="false">Strings</button>
+      {% endif %}
+      <button class="tab" type="button" role="tab" data-tab tabindex="-1"
+              id="tab-elf" aria-controls="panel-elf" aria-selected="false">ELF</button>
+    </div>
 
-    <h2>ExifTool</h2>
-    <table>
-        {% for key, val in data.exiftool.items %}
-        <tr><td>{{ key }}</td><td><code>{{ val }}</code></td></tr>
-        {% endfor %}
-    </table>
+    <div class="tabpanels">
+      <section class="tabpanel is-active" role="tabpanel" data-tab-panel
+               id="panel-hashes" aria-labelledby="tab-hashes">
+        <ul class="kv">
+          {% for alg, val in data.hash.items %}
+          <li class="kv__row">
+            <span class="kv__key">{{ alg }}</span>
+            <span class="kv__val mono">{{ val }}</span>
+            <button class="copy-btn" type="button" data-copy="{{ val }}"
+                    aria-label="Copiar {{ alg }}">
+              <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"/>
+              </svg>
+            </button>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
 
-    <h2>ReadELF</h2>
-    <pre>{{ data.readelf }}</pre>
+      <section class="tabpanel" role="tabpanel" data-tab-panel
+               id="panel-meta" aria-labelledby="tab-meta">
+        {% if data.exiftool %}
+        <ul class="kv kv--meta">
+          {% for key, val in data.exiftool.items %}
+          <li class="kv__row">
+            <span class="kv__key">{{ key }}</span>
+            <span class="kv__val">{{ val }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted">No se obtuvieron metadatos para esta muestra.</p>
+        {% endif %}
+      </section>
 
-    <h2>Strings ({{ data.strings|length }} encontradas)</h2>
-    <pre>{% for s in data.strings %}{{ s }}
-{% endfor %}</pre>
-</body>
-</html>
+      {% if data.ran_ssdeep %}
+      <section class="tabpanel" role="tabpanel" data-tab-panel
+               id="panel-ssdeep" aria-labelledby="tab-ssdeep">
+        <div class="kv__row kv__row--single">
+          <span class="kv__val mono">{{ data.ssdeep }}</span>
+          <button class="copy-btn" type="button" data-copy="{{ data.ssdeep }}"
+                  aria-label="Copiar fuzzy hash">
+            <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5"/>
+            </svg>
+          </button>
+        </div>
+        <p class="muted small">Hash difuso (ssdeep): permite medir similitud entre muestras parecidas.</p>
+      </section>
+      {% endif %}
+
+      {% if data.ran_strings %}
+      <section class="tabpanel" role="tabpanel" data-tab-panel
+               id="panel-strings" aria-labelledby="tab-strings">
+        {% if data.strings %}
+        <div class="strings__bar">
+          <input class="input input--search" type="search" data-strings-filter
+                 placeholder="Filtrar cadenas…" aria-label="Filtrar strings">
+          <span class="strings__count">
+            <strong data-strings-count>{{ data.strings|length }}</strong> de {{ data.strings|length }}
+          </span>
+        </div>
+        <ol class="strings__list" data-strings-list>
+          {% for s in data.strings %}<li class="strings__line"><span>{{ s }}</span></li>{% endfor %}
+        </ol>
+        {% else %}
+        <p class="muted">No se extrajeron cadenas de esta muestra.</p>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <section class="tabpanel" role="tabpanel" data-tab-panel
+               id="panel-elf" aria-labelledby="tab-elf">
+        <pre class="code-block">{{ data.readelf }}</pre>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -163,6 +163,7 @@ Campos-Nava-Kevin/
 ├── Vagrantfile             definición de la VM Kali
 ├── lab_keys/               llaves SSH del lab (gitignored)
 ├── core/      →  módulos compartidos (SSH, config)      · core/readme.md
+├── dataset/   →  catálogo de muestras botnet ELF        · dataset/readme.md
 ├── db/        →  esquema PostgreSQL                     · db/readme.md
 ├── docker/    →  imagen del sandbox de análisis         · docker/readme.md
 ├── engine/    →  API REST (FastAPI)                     · engine/readme.md

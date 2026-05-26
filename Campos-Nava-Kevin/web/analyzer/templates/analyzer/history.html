@@ -1,39 +1,87 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Historial — Malware Lab</title>
-    <style>
-        body { font-family: monospace; max-width: 1100px; margin: 60px auto; padding: 0 20px; background: #1a1a1a; color: #e0e0e0; }
-        h1 { color: #00ff88; }
-        a { color: #00ff88; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 8px 12px; border: 1px solid #333; text-align: left; vertical-align: top; }
-        th { color: #00aaff; }
-        code { color: #ffcc00; word-break: break-all; }
-        .err { color: #ff4444; background: #2a0000; padding: 10px; }
-    </style>
-</head>
-<body>
-    <h1>Historial de muestras</h1>
-    <a href="/">← Subir nueva muestra</a>
+{% extends 'analyzer/base.html' %}
 
-    {% if error %}
-        <p class="err">Error: {{ error }}</p>
-    {% endif %}
+{% block title %}Historial · Malware Lab{% endblock %}
 
-    <table>
-        <tr><th>SHA256</th><th>Archivo</th><th>Tamaño</th><th>Subida</th></tr>
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Registro</p>
+    <h1 class="page-head__title">Historial de muestras</h1>
+  </div>
+  {% if samples %}
+  <span class="count-pill">{{ samples|length }} muestra{{ samples|length|pluralize }}</span>
+  {% endif %}
+</header>
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4"/><path d="M12 17h.01"/>
+    </svg>
+  </span>
+  <div class="alert__body">
+    <strong>No se pudo cargar el historial.</strong>
+    <span>{{ error }}</span>
+  </div>
+</div>
+{% endif %}
+
+{% if samples %}
+<div class="panel">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">SHA-256</th>
+          <th scope="col">Archivo</th>
+          <th scope="col">Tamaño</th>
+          <th scope="col">Subida</th>
+        </tr>
+      </thead>
+      <tbody>
         {% for s in samples %}
         <tr>
-            <td><code>{{ s.sha256 }}</code></td>
-            <td>{{ s.filename }}</td>
-            <td>{{ s.size }} B</td>
-            <td>{{ s.uploaded_at }}</td>
+          <td>
+            <button class="sha-cell" type="button" data-copy="{{ s.sha256 }}"
+                    aria-label="Copiar SHA-256 de {{ s.filename }}">
+              <span class="mono">{{ s.sha256|slice:":20" }}…</span>
+              <span class="sha-cell__icon" aria-hidden="true">
+                <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6 9 17l-5-5"/>
+                </svg>
+              </span>
+            </button>
+          </td>
+          <td>{{ s.filename }}</td>
+          <td>{{ s.size|filesizeformat }}</td>
+          <td><span data-datetime="{{ s.uploaded_at }}">{{ s.uploaded_at }}</span></td>
         </tr>
-        {% empty %}
-        <tr><td colspan="4">Sin muestras aún.</td></tr>
         {% endfor %}
+      </tbody>
     </table>
-</body>
-</html>
+  </div>
+</div>
+{% elif not error %}
+<div class="empty">
+  <span class="empty__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+      <path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>
+    </svg>
+  </span>
+  <h2 class="empty__title">Aún no hay muestras</h2>
+  <p class="empty__text">Cuando analices un archivo, su registro aparecerá aquí.</p>
+  <a class="btn btn--primary" href="{% url 'index' %}">Analizar la primera muestra</a>
+</div>
+{% endif %}
+{% endblock %}

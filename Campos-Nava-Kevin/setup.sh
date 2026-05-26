@@ -21,9 +21,9 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-echo "================================================="
+
 echo "  Malware Lab — Setup"
-echo "================================================="
+
 echo ""
 
 # ── dependencias ──────────────────────────────────────────────────────────────
@@ -94,7 +94,6 @@ echo ""
 WEB_PORT=$(grep ^WEB_PORT "$ENV_FILE" | cut -d= -f2)
 echo "================================================="
 echo "  Setup completo"
-echo "================================================="
 echo ""
 echo "  Web    → http://localhost:${WEB_PORT:-8000}"
 echo "  Engine → http://localhost:8001 (API)"

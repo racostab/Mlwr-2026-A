@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Malware Lab — CLI cliente HTTP del engine."""
+"""Malware Lab — CLI cliente HTTP del engine. Kevin"""
 import os
 import subprocess
 import sys

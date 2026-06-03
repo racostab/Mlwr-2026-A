@@ -74,6 +74,33 @@ def readelf_archivo(client, ruta: str) -> str:
     return stdout.read().decode(errors="replace").strip()
 
 
+def xxd_archivo(client, ruta: str, length: int = 4096) -> str:
+    # Vista hex + caracteres. Acotamos los primeros `length` bytes para no
+    # devolver megabytes de volcado en binarios grandes (0 = archivo completo).
+    flag = f"-l {length} " if length and length > 0 else ""
+    _, stdout, stderr = client.exec_command(f"xxd {flag}{ruta}")
+    stdout.channel.recv_exit_status()
+    out = stdout.read().decode(errors="replace").rstrip("\n")
+    err = stderr.read().decode().strip()
+    return out or (f"ERROR: {err}" if err else "")
+
+
+def radare_archivo(client, ruta: str) -> str:
+    # Desensamblado con radare2 en modo batch (-q) y sin color (scr.color=0).
+    # -A ejecuta el análisis (aaa) al cargar; listamos funciones (afl) y
+    # desensamblamos el punto de entrada y main si existe.
+    cmd = (
+        "r2 -A -q -e scr.color=0 "
+        '-c "afl ; '
+        'echo === entry0 === ; pdf @ entry0 ; '
+        'echo === main === ; pdf @ main" '
+        f"{ruta} 2>&1"
+    )
+    _, stdout, _ = client.exec_command(cmd)
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode(errors="replace").strip()
+
+
 def ssdeep_archivo(client, ruta: str) -> str:
     _, stdout, stderr = client.exec_command(f"ssdeep {ruta}")
     stdout.channel.recv_exit_status()

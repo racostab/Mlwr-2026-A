@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     yara \
     python3 \
     procps \
+    xxd \
+    radare2 \
     libimage-exiftool-perl \
  && rm -rf /var/lib/apt/lists/*
 

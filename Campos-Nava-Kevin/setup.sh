@@ -89,6 +89,19 @@ else
 fi
 echo ""
 
+# ── Firewall: aislar el host de la VM (red host-only) ────────────────────────
+# Solo si existe la interfaz host-only vboxnet0 (la VM dinámica ya configurada).
+# Las reglas no persisten al reiniciar el host, por eso se reaplican en cada setup.
+if VBoxManage list hostonlyifs 2>/dev/null | grep -q '^Name:.*vboxnet0'; then
+    echo "-- Firewall: aislando el host de la VM (host-only) --"
+    if bash "$SCRIPT_DIR/kali/isolate_host.sh"; then
+        ok "Reglas de aislamiento aplicadas en vboxnet0"
+    else
+        warn "No se pudo aplicar el firewall host-only (corre 'bash kali/isolate_host.sh' a mano)"
+    fi
+    echo ""
+fi
+
 # ── resumen ───────────────────────────────────────────────────────────────────
 
 WEB_PORT=$(grep ^WEB_PORT "$ENV_FILE" | cut -d= -f2)

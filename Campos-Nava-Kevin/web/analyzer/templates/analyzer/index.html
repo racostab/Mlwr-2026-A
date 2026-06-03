@@ -7,8 +7,9 @@
   <p class="hero__eyebrow">Análisis estático</p>
   <h1 class="hero__title">Inspecciona un binario sin ejecutarlo</h1>
   <p class="hero__lead">
-    Sube una muestra y obtén hashes, entropía, cadenas, metadatos y cabeceras ELF.
-    El archivo se procesa en un contenedor aislado, sin acceso a la red.
+    Sube una o varias muestras y obtén hashes, entropía, cadenas, metadatos,
+    cabeceras ELF, volcado hex (xxd) y desensamblado (radare2).
+    Los archivos se procesan en un contenedor aislado, sin acceso a la red.
   </p>
 </section>
 
@@ -39,11 +40,11 @@
         <path d="M20 16.7A5 5 0 0 0 18 7h-1.3A8 8 0 1 0 4 15"/>
       </svg>
     </span>
-    <span class="dropzone__title">Arrastra el archivo aquí</span>
-    <span class="dropzone__hint">o <span class="dropzone__link">selecciona desde tu equipo</span></span>
+    <span class="dropzone__title">Arrastra los archivos aquí</span>
+    <span class="dropzone__hint">o <span class="dropzone__link">selecciona desde tu equipo</span> (uno o varios)</span>
     <span class="dropzone__filename" data-dropzone-name hidden></span>
     <input class="visually-hidden" id="file-input" type="file" name="file"
-           required data-dropzone-input>
+           multiple required data-dropzone-input>
   </label>
 
   <fieldset class="analysis">
@@ -107,7 +108,7 @@
         <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
       </svg>
     </span>
-    Analizar muestra
+    Analizar muestras
   </button>
 </form>
 {% endblock %}

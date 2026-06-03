@@ -13,7 +13,10 @@
 
     function reflectFile() {
       if (input.files && input.files.length) {
-        nameEl.textContent = input.files[0].name;
+        var count = input.files.length;
+        nameEl.textContent = count === 1
+          ? input.files[0].name
+          : count + ' archivos seleccionados';
         nameEl.hidden = false;
         dz.classList.add('has-file');
       } else {
@@ -82,47 +85,53 @@
     }
   });
 
-  /* ---- 4. Pestañas del reporte (accesibles con teclado) ---- */
-  var tabsRoot = document.querySelector('[data-tabs]');
-  if (tabsRoot) {
-    var tabs = Array.prototype.slice.call(tabsRoot.querySelectorAll('[data-tab]'));
-    var panels = Array.prototype.slice.call(tabsRoot.querySelectorAll('[data-tab-panel]'));
+  /* ---- 4. Pestañas del reporte (accesibles con teclado) ----
+     Puede haber varios grupos de pestañas (un reporte por muestra),
+     así que inicializamos cada [data-tabs] de forma independiente. */
+  Array.prototype.forEach.call(
+    document.querySelectorAll('[data-tabs]'),
+    function (tabsRoot) {
+      var tabs = Array.prototype.slice.call(tabsRoot.querySelectorAll('[data-tab]'));
+      var panels = Array.prototype.slice.call(tabsRoot.querySelectorAll('[data-tab-panel]'));
 
-    function activate(tab) {
-      tabs.forEach(function (t) {
-        var on = t === tab;
-        t.classList.toggle('is-active', on);
-        t.setAttribute('aria-selected', on ? 'true' : 'false');
-        t.tabIndex = on ? 0 : -1;
-      });
-      panels.forEach(function (p) {
-        p.classList.toggle('is-active', p.id === tab.getAttribute('aria-controls'));
+      function activate(tab) {
+        tabs.forEach(function (t) {
+          var on = t === tab;
+          t.classList.toggle('is-active', on);
+          t.setAttribute('aria-selected', on ? 'true' : 'false');
+          t.tabIndex = on ? 0 : -1;
+        });
+        panels.forEach(function (p) {
+          p.classList.toggle('is-active', p.id === tab.getAttribute('aria-controls'));
+        });
+      }
+
+      tabs.forEach(function (tab, i) {
+        tab.addEventListener('click', function () { activate(tab); });
+        tab.addEventListener('keydown', function (e) {
+          var next = null;
+          if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+          else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+          else if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = tabs.length - 1;
+          if (next !== null) {
+            e.preventDefault();
+            tabs[next].focus();
+            activate(tabs[next]);
+          }
+        });
       });
     }
+  );
 
-    tabs.forEach(function (tab, i) {
-      tab.addEventListener('click', function () { activate(tab); });
-      tab.addEventListener('keydown', function (e) {
-        var next = null;
-        if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
-        else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
-        else if (e.key === 'Home') next = 0;
-        else if (e.key === 'End') next = tabs.length - 1;
-        if (next !== null) {
-          e.preventDefault();
-          tabs[next].focus();
-          activate(tabs[next]);
-        }
-      });
-    });
-  }
-
-  /* ---- 5. Medidor de entropía ---- */
-  var meter = document.querySelector('[data-entropy]');
-  if (meter) {
-    var value = parseFloat(meter.getAttribute('data-entropy'));
-    var note = document.querySelector('[data-entropy-note]');
-    if (!isNaN(value)) {
+  /* ---- 5. Medidor de entropía (uno por muestra) ---- */
+  Array.prototype.forEach.call(
+    document.querySelectorAll('[data-entropy]'),
+    function (meter) {
+      var value = parseFloat(meter.getAttribute('data-entropy'));
+      if (isNaN(value)) return;
+      var stat = meter.closest('.stat') || meter.parentNode;
+      var note = stat ? stat.querySelector('[data-entropy-note]') : null;
       var pct = Math.max(0, Math.min(100, (value / 8) * 100));
       var fill = meter.querySelector('.meter__fill');
       var severity = value >= 7.2 ? 'is-danger' : (value >= 6 ? 'is-warn' : 'is-ok');
@@ -137,26 +146,29 @@
         note.classList.add(severity);
       }
     }
-  }
+  );
 
-  /* ---- 6. Filtro de strings ---- */
-  var filter = document.querySelector('[data-strings-filter]');
-  if (filter) {
-    var list = document.querySelector('[data-strings-list]');
-    var counter = document.querySelector('[data-strings-count]');
-    var lines = list ? Array.prototype.slice.call(list.children) : [];
+  /* ---- 6. Filtro de strings (uno por muestra) ---- */
+  Array.prototype.forEach.call(
+    document.querySelectorAll('[data-strings-filter]'),
+    function (filter) {
+      var scope = filter.closest('[data-tab-panel]') || document;
+      var list = scope.querySelector('[data-strings-list]');
+      var counter = scope.querySelector('[data-strings-count]');
+      var lines = list ? Array.prototype.slice.call(list.children) : [];
 
-    filter.addEventListener('input', function () {
-      var q = filter.value.toLowerCase();
-      var shown = 0;
-      lines.forEach(function (li) {
-        var match = li.textContent.toLowerCase().indexOf(q) !== -1;
-        li.hidden = !match;
-        if (match) shown++;
+      filter.addEventListener('input', function () {
+        var q = filter.value.toLowerCase();
+        var shown = 0;
+        lines.forEach(function (li) {
+          var match = li.textContent.toLowerCase().indexOf(q) !== -1;
+          li.hidden = !match;
+          if (match) shown++;
+        });
+        if (counter) counter.textContent = shown;
       });
-      if (counter) counter.textContent = shown;
-    });
-  }
+    }
+  );
 
   /* ---- 7. Formato de fechas ---- */
   Array.prototype.forEach.call(

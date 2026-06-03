@@ -16,9 +16,11 @@ from docker.debian import (
     exiftool_archivo,
     file_archivo,
     hash_archivo,
+    radare_archivo,
     readelf_archivo,
     ssdeep_archivo,
     strings_archivo,
+    xxd_archivo,
 )
 from db import (
     get_report,
@@ -138,3 +140,19 @@ def sample_exiftool(sha256: str):
 @app.get("/samples/{sha256}/readelf")
 def sample_readelf(sha256: str):
     return {"readelf": _cached(sha256, "readelf", readelf_archivo)}
+
+
+@app.get("/samples/{sha256}/xxd")
+def sample_xxd(sha256: str, length: int = Query(4096, ge=0, le=1_048_576)):
+    remoto = _require_sample(sha256)
+    client = _ssh()
+    try:
+        result = xxd_archivo(client, remoto, length)
+    finally:
+        client.close()
+    return {"xxd": result, "length": length}
+
+
+@app.get("/samples/{sha256}/radare")
+def sample_radare(sha256: str):
+    return {"radare": _cached(sha256, "radare", radare_archivo)}

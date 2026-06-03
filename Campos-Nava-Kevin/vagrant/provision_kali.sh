@@ -51,7 +51,15 @@ apt-get install -y -qq \
     curl \
     wget \
     net-tools \
-    procps
+    procps \
+    procdump
+
+# El volcado de memoria necesita ptrace sobre procesos no-descendientes y sudo
+# no interactivo. Esto es seguro porque la VM es desechable y aislada.
+echo 'kernel.yama.ptrace_scope=0' > /etc/sysctl.d/10-ptrace.conf
+sysctl -p /etc/sysctl.d/10-ptrace.conf 2>/dev/null || true
+echo 'kali ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/kali-lab
+chmod 440 /etc/sudoers.d/kali-lab
 
 echo "[+] Provisioning completo."
 echo "    Conéctate con: ssh -i ~/.ssh/id_rsa -p 2222 kali@127.0.0.1"

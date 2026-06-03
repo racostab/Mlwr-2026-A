@@ -24,6 +24,8 @@ Parte de `debian:bookworm-slim` e instala las herramientas de análisis:
 | `bsdmainutils`           | `hexdump` y utilidades                   |
 | `ssdeep`                 | hashing difuso (*fuzzy hashing*)         |
 | `yara`                   | reglas de detección de patrones          |
+| `xxd`                    | volcado hexadecimal + ASCII              |
+| `radare2`                | desensamblado (`r2`)                      |
 | `libimage-exiftool-perl` | `exiftool` (metadatos)                   |
 | `python3`, `procps`      | cálculo de entropía y utilidades         |
 
@@ -50,6 +52,8 @@ Cada función ejecuta un comando dentro del sandbox por SSH y parsea su salida:
 | `entropia_archivo`   | cálculo en Python (entropía de Shannon) |
 | `exiftool_archivo`   | `exiftool`         |
 | `readelf_archivo`    | `readelf -a`       |
+| `xxd_archivo`        | `xxd` (hex + ASCII, primeros bytes) |
+| `radare_archivo`     | `r2 -A` (`afl`, `pdf @ entry0`, `pdf @ main`) |
 | `ssdeep_archivo`     | `ssdeep`           |
 
 El `engine` importa estas funciones (el `engine/Dockerfile` copia este archivo

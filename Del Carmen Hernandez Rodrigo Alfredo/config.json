@@ -1,0 +1,7 @@
+{
+    "vm_name": "kali",
+    "ssh_host": "localhost",
+    "ssh_port": 2222,
+    "ssh_user": "kali",
+    "ssh_key_path": "~/.ssh/id_rsa"
+}

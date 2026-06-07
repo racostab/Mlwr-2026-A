@@ -1,0 +1,61 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}Reglas YARA · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Detección</p>
+    <h1 class="page-head__title">Reglas YARA</h1>
+  </div>
+  {% if archivos %}
+  <span class="count-pill">{{ archivos|length }} archivo{{ archivos|length|pluralize }}</span>
+  {% endif %}
+</header>
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+  <div class="alert__body">
+    <strong>No se pudieron cargar las reglas.</strong>
+    <span>{{ error }}</span>
+  </div>
+</div>
+{% endif %}
+
+<p class="muted">
+  Reglas cargadas en el sandbox (<code>/rules/*.yar</code>). El analizador
+  <code>yara</code> escanea cada muestra con todas ellas. Añade nuevas reglas en
+  <code>estatico/sandbox/reglas_yara/</code> y reconstruye el contenedor.
+</p>
+
+{% for f in archivos %}
+<div class="panel report">
+  <header class="report-head">
+    <div class="report-head__main">
+      <p class="report-head__eyebrow">{{ f.reglas|length }} regla{{ f.reglas|length|pluralize }}</p>
+      <h2 class="report-head__title mono">{{ f.archivo }}</h2>
+    </div>
+  </header>
+
+  {% if f.reglas %}
+  <ul class="kv">
+    {% for r in f.reglas %}
+    <li class="kv__row">
+      <span class="kv__key mono">{{ r.nombre }}</span>
+      <span class="kv__val">{{ r.descripcion|default:"—" }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <pre class="code-block">{{ f.contenido }}</pre>
+</div>
+{% empty %}
+{% if not error %}
+<div class="empty">
+  <h2 class="empty__title">No hay reglas YARA</h2>
+  <p class="empty__text">Agrega archivos <code>.yar</code> en <code>estatico/sandbox/reglas_yara/</code>.</p>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

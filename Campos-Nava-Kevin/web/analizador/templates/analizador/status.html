@@ -1,0 +1,45 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}Estado del lab · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Sistema</p>
+    <h1 class="page-head__title">Estado del lab</h1>
+  </div>
+  {% if estado.ok %}
+  <span class="count-pill">Todo operativo</span>
+  {% endif %}
+</header>
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+  <div class="alert__body">
+    <strong>No se pudo contactar al engine.</strong>
+    <span>{{ error }}</span>
+  </div>
+</div>
+{% else %}
+<div class="panel">
+  <ul class="kv">
+    <li class="kv__row">
+      <span class="kv__key">engine (API)</span>
+      <span class="kv__val">{% if estado.engine == 'ok' %}✓ OK{% else %}✗ {{ estado.engine }}{% endif %}</span>
+    </li>
+    <li class="kv__row">
+      <span class="kv__key">base de datos</span>
+      <span class="kv__val">{% if estado.db == 'ok' %}✓ OK{% else %}✗ {{ estado.db }}{% endif %}</span>
+    </li>
+    <li class="kv__row">
+      <span class="kv__key">sandbox (SSH)</span>
+      <span class="kv__val">{% if estado.sandbox == 'ok' %}✓ OK{% else %}✗ {{ estado.sandbox }}{% endif %}</span>
+    </li>
+  </ul>
+  <p class="muted small">
+    El engine comprueba la base de datos con una consulta y el sandbox abriendo
+    la conexión SSH (la misma que usa para enviar muestras por SFTP).
+  </p>
+</div>
+{% endif %}
+{% endblock %}

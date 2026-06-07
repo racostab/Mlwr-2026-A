@@ -2,13 +2,15 @@
 services:
 
   sandbox:
-    build: ./docker
+    build:
+      context: ./estatico
+      dockerfile: user_data/sandbox/Dockerfile
     container_name: lab-sandbox
     networks:
       - lab-sandbox
+    # Sin volumen compartido: el engine envía cada muestra por SFTP sobre SSH.
     volumes:
       - ./lab_keys/id_rsa.pub:/tmp/authorized_keys:ro
-      - samples:/samples
     healthcheck:
       test: ["CMD-SHELL", "pgrep sshd >/dev/null"]
       interval: 5s
@@ -27,7 +29,7 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:-lab}
     volumes:
       - db-data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./base_de_datos/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab}"]
       interval: 5s
@@ -38,7 +40,7 @@ services:
   engine:
     build:
       context: .
-      dockerfile: engine/Dockerfile
+      dockerfile: estatico/user_data/motor/Dockerfile
     container_name: lab-engine
     networks:
       - lab-frontend

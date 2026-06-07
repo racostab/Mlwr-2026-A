@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "compartido"
+version = "0.1.0"
+description = "Malware Lab — biblioteca compartida (conexión SSH/SFTP y configuración)"
+requires-python = ">=3.10"
+dependencies = [
+    "paramiko>=3.0",
+]
+
+# compartido/ y sus subpaquetes son namespace packages (PEP 420): no hay
+# archivos __init__.py, así que se descubren con namespaces = true.
+[tool.setuptools.packages.find]
+include = ["compartido*"]
+namespaces = true

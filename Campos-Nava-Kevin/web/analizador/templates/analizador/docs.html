@@ -1,0 +1,64 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}Documentación · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Ayuda</p>
+    <h1 class="page-head__title">Documentación</h1>
+  </div>
+</header>
+
+<div class="panel">
+  <header class="report-head"><div class="report-head__main">
+    <h2 class="report-head__title">¿Qué es esto?</h2>
+  </div></header>
+  <p class="muted">
+    Laboratorio de análisis <strong>estático</strong> de binarios. Subes una o
+    varias muestras y eliges qué comandos correr; se ejecutan dentro de un
+    <strong>sandbox aislado</strong> (red interna, sin internet ni acceso al host).
+    La muestra viaja al sandbox por <strong>SFTP</strong> sobre SSH — no hay
+    carpeta compartida.
+  </p>
+</div>
+
+<div class="panel">
+  <header class="report-head"><div class="report-head__main">
+    <h2 class="report-head__title">Cómo analizar</h2>
+  </div></header>
+  <ul class="kv">
+    <li class="kv__row"><span class="kv__key">1. Subir</span><span class="kv__val">Arrastra una o varias muestras en <a href="{% url 'index' %}">Analizar</a>.</span></li>
+    <li class="kv__row"><span class="kv__key">2. Modo</span><span class="kv__val"><strong>Por defecto</strong> corre un set base; <strong>personalizado</strong> te deja elegir comandos y escribir uno guiado.</span></li>
+    <li class="kv__row"><span class="kv__key">3. Reporte</span><span class="kv__val">Cada comando aparece en su pestaña. El historial queda en <a href="{% url 'history' %}">Historial</a>.</span></li>
+  </ul>
+</div>
+
+<div class="panel">
+  <header class="report-head"><div class="report-head__main">
+    <h2 class="report-head__title">Comandos del catálogo</h2>
+  </div></header>
+  {% if tools %}
+  <ul class="kv">
+    {% for t in tools %}
+    <li class="kv__row"><span class="kv__key mono">{{ t.id }}</span><span class="kv__val">{{ t.etiqueta }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No se pudo obtener el catálogo del engine.</p>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <header class="report-head"><div class="report-head__main">
+    <h2 class="report-head__title">Comandos personalizados</h2>
+  </div></header>
+  <p class="muted">
+    En modo personalizado, además de los comandos del catálogo, tienes una
+    <strong>barra para añadir el tuyo</strong>: escríbelo y pulsa Enter (o
+    «Añadir») y se suma como una etiqueta más a tu análisis. Cada comando se
+    ejecuta en el sandbox aislado con la ruta de la muestra añadida al final.
+    Es un comando por vez (sin encadenar con <code>; | &amp;</code>), no una shell.
+  </p>
+</div>
+{% endblock %}

@@ -1,0 +1,220 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es" class="no-js">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Malware Lab — consola de análisis estático de binarios en un sandbox aislado.">
+  <meta name="color-scheme" content="dark">
+  <title>{% block title %}Malware Lab{% endblock %}</title>
+
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Cpath%20fill='%236c5ce7'%20d='M12%201.5%2021%205v6.2c0%205.5-3.8%209.6-9%2011.3C6.8%2020.8%203%2016.7%203%2011.2V5z'/%3E%3C/svg%3E">
+
+  <script>document.documentElement.className = 'js';</script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{% static 'analizador/styles.css' %}?v=2">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <div class="layout">
+
+    {# ---------- Sidebar ---------- #}
+    <aside class="sidebar" id="sidebar" data-sidebar>
+      <div class="sidebar__head">
+        <a class="brand" href="{% url 'index' %}" aria-label="Malware Lab — inicio">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5z"/>
+              <path d="m9 12 2 2 4-4"/>
+            </svg>
+          </span>
+          <span class="brand__text">Malware<span class="brand__accent">Lab</span></span>
+        </a>
+      </div>
+
+      <nav class="sidebar__nav" aria-label="Secciones del laboratorio">
+        {% with url_name=request.resolver_match.url_name %}
+        <div class="nav-group">
+          <p class="nav-group__label">Análisis</p>
+          <ul class="nav-group__list">
+            <li>
+              <a class="nav-item {% if url_name == 'index' %}is-active{% endif %}"
+                 href="{% url 'index' %}"
+                 {% if url_name == 'index' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Analizar</span>
+              </a>
+            </li>
+            <li>
+              <a class="nav-item {% if url_name == 'history' %}is-active{% endif %}"
+                 href="{% url 'history' %}"
+                 {% if url_name == 'history' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Historial</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+        {% endwith %}
+
+        <div class="nav-group">
+          <p class="nav-group__label">Laboratorio</p>
+          <ul class="nav-group__list">
+            <li>
+              <span class="nav-item is-disabled" aria-disabled="true">
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m6.5 9.5 3 2.5-3 2.5"/><path d="M13 15h4.5"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Análisis dinámico</span>
+                <span class="nav-item__badge">Pronto</span>
+              </span>
+            </li>
+            <li>
+              <a class="nav-item {% if request.resolver_match.url_name == 'rules' %}is-active{% endif %}"
+                 href="{% url 'rules' %}"
+                 {% if request.resolver_match.url_name == 'rules' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 3 5 6v5.5c0 4.3 3 7.3 7 8.5 4-1.2 7-4.2 7-8.5V6z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Reglas YARA</span>
+              </a>
+            </li>
+            <li>
+              <span class="nav-item is-disabled" aria-disabled="true">
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/>
+                    <path d="M12 2v3"/><path d="M12 19v3"/><path d="M2 12h3"/><path d="M19 12h3"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">MITRE ATT&amp;CK</span>
+                <span class="nav-item__badge">Pronto</span>
+              </span>
+            </li>
+            <li>
+              <a class="nav-item {% if request.resolver_match.url_name == 'stats' %}is-active{% endif %}"
+                 href="{% url 'stats' %}"
+                 {% if request.resolver_match.url_name == 'stats' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 3v17a1 1 0 0 0 1 1h17"/>
+                    <path d="M7 15v3"/><path d="M12 9v9"/><path d="M17 5v13"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Estadísticas</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="nav-group">
+          <p class="nav-group__label">Sistema</p>
+          <ul class="nav-group__list">
+            <li>
+              <a class="nav-item {% if request.resolver_match.url_name == 'status' %}is-active{% endif %}"
+                 href="{% url 'status' %}"
+                 {% if request.resolver_match.url_name == 'status' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Estado del lab</span>
+              </a>
+            </li>
+            <li>
+              <a class="nav-item {% if request.resolver_match.url_name == 'docs' %}is-active{% endif %}"
+                 href="{% url 'docs' %}"
+                 {% if request.resolver_match.url_name == 'docs' %}aria-current="page"{% endif %}>
+                <span class="nav-item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                  </svg>
+                </span>
+                <span class="nav-item__text">Documentación</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <div class="sidebar__foot">
+        <p class="sidebar__foot-title">Malware Lab</p>
+        <p class="sidebar__foot-sub">Análisis estático de binarios</p>
+      </div>
+    </aside>
+
+    {# ---------- Zona de contenido ---------- #}
+    <div class="layout__main">
+      <header class="mobilebar">
+        <button class="mobilebar__toggle" type="button" data-sidebar-toggle
+                aria-expanded="false" aria-controls="sidebar" aria-label="Abrir o cerrar menú">
+          <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/>
+          </svg>
+          <svg class="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+        <a class="brand" href="{% url 'index' %}" aria-label="Malware Lab — inicio">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2 4 5v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V5z"/>
+              <path d="m9 12 2 2 4-4"/>
+            </svg>
+          </span>
+          <span class="brand__text">Malware<span class="brand__accent">Lab</span></span>
+        </a>
+      </header>
+
+      <main id="main" class="main">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <div class="sidebar-backdrop" data-sidebar-backdrop></div>
+
+  <div class="overlay" data-overlay aria-hidden="true" role="status">
+    <div class="overlay__card">
+      <span class="spinner" aria-hidden="true"></span>
+      <p class="overlay__title">Analizando muestra…</p>
+      <p class="overlay__text">Ejecutando las herramientas en el sandbox. Esto puede tardar unos segundos.</p>
+    </div>
+  </div>
+
+  <script src="{% static 'analizador/app.js' %}?v=2" defer></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}Estadísticas · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Métricas</p>
+    <h1 class="page-head__title">Estadísticas del lab</h1>
+  </div>
+</header>
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+  <div class="alert__body">
+    <strong>No se pudieron cargar las estadísticas.</strong>
+    <span>{{ error }}</span>
+  </div>
+</div>
+{% else %}
+
+<section class="stats" aria-label="Resumen">
+  <div class="stat">
+    <span class="stat__label">Muestras</span>
+    <span class="stat__value">{{ stats.samples }}</span>
+    <span class="stat__sub">archivos únicos (por sha256)</span>
+  </div>
+  <div class="stat">
+    <span class="stat__label">Reportes cacheados</span>
+    <span class="stat__value">{{ stats.reports }}</span>
+    <span class="stat__sub">resultados guardados</span>
+  </div>
+  <div class="stat">
+    <span class="stat__label">Volumen total</span>
+    <span class="stat__value">{{ stats.bytes_total|filesizeformat }}</span>
+    <span class="stat__sub">{{ stats.bytes_total }} bytes</span>
+  </div>
+</section>
+
+<div class="panel">
+  <header class="report-head">
+    <div class="report-head__main">
+      <h2 class="report-head__title">Reportes por comando</h2>
+    </div>
+  </header>
+  {% if stats.por_comando %}
+  <ul class="kv">
+    {% for c in stats.por_comando %}
+    <li class="kv__row">
+      <span class="kv__key">{{ c.kind }}</span>
+      <span class="kv__val">{{ c.total }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Todavía no se ha ejecutado ningún análisis.</p>
+  {% endif %}
+</div>
+
+{% if stats.recientes %}
+<div class="panel">
+  <header class="report-head">
+    <div class="report-head__main">
+      <h2 class="report-head__title">Muestras recientes</h2>
+    </div>
+  </header>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th scope="col">Archivo</th><th scope="col">Tamaño</th><th scope="col">Subida</th></tr>
+      </thead>
+      <tbody>
+        {% for s in stats.recientes %}
+        <tr>
+          <td>{{ s.filename }}</td>
+          <td>{{ s.size|filesizeformat }}</td>
+          <td><span data-datetime="{{ s.uploaded_at }}">{{ s.uploaded_at }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

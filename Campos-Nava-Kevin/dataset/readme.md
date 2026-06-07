@@ -14,7 +14,7 @@ para poder versionarlo en git y consumirlo desde código.
 
 ## Requisitos
 
-- Python 3 con `requests` (ya está en `requirements.txt` del proyecto).
+- Python 3 con `requests` (`pip install requests`).
 - Una **Auth-Key gratuita** de abuse.ch — MalwareBazaar exige autenticación en
   todas las consultas a su API:
   1. Regístrate en https://auth.abuse.ch/
@@ -24,20 +24,20 @@ para poder versionarlo en git y consumirlo desde código.
 
 ```bash
 export MB_AUTH_KEY=<tu-key>
-python3 dataset/build_dataset.py
+python3 dataset/scripts/build_dataset.py
 ```
 
 Opciones:
 
 ```bash
 # Familias concretas y más muestras por familia
-python3 dataset/build_dataset.py --families Mirai Gafgyt Mozi --limit 300
+python3 dataset/scripts/build_dataset.py --families Mirai Gafgyt Mozi --limit 300
 
 # Acumular sobre un dataset previo en vez de sobrescribir
-python3 dataset/build_dataset.py --merge
+python3 dataset/scripts/build_dataset.py --merge
 
 # Pasar la key sin variable de entorno
-python3 dataset/build_dataset.py --auth-key <tu-key>
+python3 dataset/scripts/build_dataset.py --auth-key <tu-key>
 ```
 
 | Opción        | Por defecto                                  | Qué hace                                   |
@@ -45,7 +45,7 @@ python3 dataset/build_dataset.py --auth-key <tu-key>
 | `--families`  | Mirai, Gafgyt, Bashlite, Tsunami, Mozi, XorDDoS, Hajime, Kaiji | firmas de familia a consultar |
 | `--limit`     | 100                                          | muestras a pedir por familia (máx. 1000)   |
 | `--auth-key`  | `$MB_AUTH_KEY`                               | Auth-Key de abuse.ch                       |
-| `--out-dir`   | esta carpeta                                 | dónde escribir los archivos de salida      |
+| `--out-dir`   | `dataset/`                                   | dónde escribir los archivos de salida      |
 | `--merge`     | desactivado                                  | unir con el JSON existente (dedup por hash)|
 
 ## Cómo funciona

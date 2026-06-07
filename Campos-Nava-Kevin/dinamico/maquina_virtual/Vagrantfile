@@ -1,0 +1,40 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Box MÍNIMA (Debian, ~300 MB) en vez de Kali (15 GB). Las herramientas de
+  # análisis dinámico se instalan en el provisioning — solo las necesarias.
+  config.vm.box      = "debian/bookworm64"
+  config.vm.hostname = "lab-dinamico"
+
+  # Sin carpeta compartida: no la necesitamos y evita depender de Guest Additions.
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+
+  # NAT (adaptador 1): SOLO para que Vagrant pueda provisionar (clonar la box,
+  # instalar llaves y herramientas). Tras provisionar, el lab le QUITA este NAT
+  # para dejar la VM sin internet (ver dinamico/scripts/red_aislada.py).
+  config.vm.network "forwarded_port",
+    guest: 22, host: 2222, host_ip: "127.0.0.1",
+    id: "ssh", auto_correct: true
+
+  # Red privada HOST-ONLY (adaptador 2): la VM tiene IP fija 192.168.56.10 y solo
+  # ve al host (192.168.56.1). Es el canal AISLADO por el que el análisis dinámico
+  # le habla por SSH/SFTP. Coincide con .kali.host en config.json.
+  config.vm.network "private_network", ip: "192.168.56.10"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name   = "kali-malware-lab"
+    vb.memory = 2048   # mínimo razonable para el análisis dinámico
+    vb.cpus   = 1
+    vb.gui    = false
+  end
+
+  # Llave PÚBLICA del lab (no la personal del usuario): provision_kali.sh la
+  # instala como authorized_keys de la VM. La privada (lab_keys/id_rsa) se queda
+  # en el host. Se resuelve relativa a este Vagrantfile (raíz del repo / lab_keys).
+  config.vm.provision "file",
+    source:      File.expand_path("../../lab_keys/id_rsa.pub", __dir__),
+    destination: "/tmp/host_key.pub"
+
+  config.vm.provision "shell", path: "../user_data/provision_kali.sh"
+end

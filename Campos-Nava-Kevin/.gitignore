@@ -6,3 +6,8 @@ samples/
 .vagrant/
 *.pyc
 __pycache__/
+*.egg-info/
+build/
+dynamic_output/
+.~lock.*#
+.pytest_cache/

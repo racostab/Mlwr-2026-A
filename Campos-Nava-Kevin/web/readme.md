@@ -12,10 +12,10 @@ web/
 ├── manage.py            utilidad de gestión de Django
 ├── Dockerfile           imagen del servicio
 ├── requirements.txt     django, requests
-├── lab_web/             proyecto Django (settings, urls, wsgi)
-└── analyzer/            app principal
-    ├── views.py         lógica de las páginas
-    ├── urls.py          rutas
+├── sitio/               proyecto Django (configuracion.py, rutas.py, wsgi.py)
+└── analizador/          app principal
+    ├── servicios.py     lógica de las páginas (las "views")
+    ├── rutas.py         rutas de la app
     └── templates/       index.html · results.html · history.html
 ```
 
@@ -23,14 +23,20 @@ web/
 
 | Ruta        | Vista     | Qué hace                                                  |
 |-------------|-----------|-----------------------------------------------------------|
-| `/`         | `index`   | Formulario de subida. Al enviar, sube la muestra al engine y muestra el reporte completo (`results.html`). |
+| `/`         | `index`   | Sube N muestras y elige qué comandos correr (checkboxes del catálogo) + un comando guiado opcional. Muestra el reporte (`results.html`). |
 | `/history/` | `history` | Lista todas las muestras analizadas.                      |
+| `/rules/`   | `rules`   | Reglas YARA cargadas en el sandbox (`/yara/rules`).       |
+| `/stats/`   | `stats`   | Métricas del lab (`/stats`).                              |
+| `/status/`  | `status`  | Estado de engine / db / sandbox (`/status`).              |
+| `/docs/`    | `docs`    | Guía de uso, catálogo de comandos y lista blanca.         |
 
 ## Comunicación con el engine
 
-La vista usa la variable de entorno `ENGINE_URL` para saber dónde está la API
-(en Compose: `http://engine:8001`). Sube el archivo a `POST /samples` y luego
-pide cada reporte (`/hash`, `/file`, `/strings`, ...).
+La vista usa la variable de entorno `ENGINE_URL` (en Compose: `http://engine:8001`).
+Pide el catálogo a `GET /tools` para pintar los checkboxes, sube cada archivo a
+`POST /samples` y ejecuta los comandos elegidos vía `GET /samples/{sha}/run/{tool}`.
+`results.html` renderiza cada resultado de forma genérica según su tipo
+(pares clave/valor, coincidencias YARA o bloque de texto).
 
 ## Nota
 

@@ -1,0 +1,155 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}{% if reports|length == 1 %}{{ reports.0.filename }}{% else %}{{ reports|length }} muestras{% endif %} · Reporte · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Reporte de análisis</p>
+    <h1 class="page-head__title">
+      {% if reports|length == 1 %}Resultado de la muestra{% else %}Resultados de {{ reports|length }} muestras{% endif %}
+    </h1>
+  </div>
+  <a class="btn btn--ghost" href="{% url 'index' %}">Analizar otras</a>
+</header>
+
+{% if errors %}
+<div class="alert alert--error" role="alert">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+      <path d="M12 9v4"/><path d="M12 17h.01"/>
+    </svg>
+  </span>
+  <div class="alert__body">
+    <strong>Algunas muestras no se pudieron analizar.</strong>
+    <ul>
+      {% for e in errors %}<li>{{ e.filename }}: {{ e.error }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{% for data in reports %}
+{% with n=forloop.counter %}
+<div class="panel report">
+  <header class="report-head">
+    <div class="report-head__main">
+      <p class="report-head__eyebrow">Muestra {{ forloop.counter }} de {{ reports|length }}</p>
+      <h2 class="report-head__title">{{ data.filename }}</h2>
+      <button class="sha-chip" type="button" data-copy="{{ data.sha256 }}"
+              aria-label="Copiar hash SHA-256">
+        <span class="sha-chip__label">SHA-256</span>
+        <span class="sha-chip__value mono">{{ data.sha256 }}</span>
+        <span class="sha-chip__icon" aria-hidden="true">
+          <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5"/>
+          </svg>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <section class="stats" aria-label="Resumen de la muestra">
+    {% if data.mapa.file %}
+    <div class="stat">
+      <span class="stat__label">Tipo de archivo</span>
+      <span class="stat__value stat__value--text">{{ data.mapa.file }}</span>
+    </div>
+    {% endif %}
+    {% if data.mapa.entropy %}
+    <div class="stat">
+      <span class="stat__label">Entropía</span>
+      <span class="stat__value">{{ data.mapa.entropy }} <span class="stat__unit">bits/byte</span></span>
+      <div class="meter" data-entropy="{{ data.mapa.entropy }}">
+        <div class="meter__track"><div class="meter__fill"></div></div>
+      </div>
+      <span class="stat__sub" data-entropy-note>Escala 0–8</span>
+    </div>
+    {% endif %}
+    <div class="stat">
+      <span class="stat__label">Tamaño</span>
+      <span class="stat__value">{{ data.size|filesizeformat }}</span>
+      <span class="stat__sub">{{ data.size }} bytes</span>
+    </div>
+  </section>
+
+  <div class="tabs" data-tabs>
+    <div class="tablist" role="tablist" aria-label="Secciones del reporte">
+      {% for r in data.resultados %}
+      <button class="tab {% if forloop.first %}is-active{% endif %}" type="button" role="tab" data-tab
+              {% if not forloop.first %}tabindex="-1"{% endif %}
+              id="tab-{{ forloop.counter }}-{{ n }}" aria-controls="panel-{{ forloop.counter }}-{{ n }}"
+              aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">{{ r.etiqueta }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="tabpanels">
+      {% for r in data.resultados %}
+      <section class="tabpanel {% if forloop.first %}is-active{% endif %}" role="tabpanel" data-tab-panel
+               id="panel-{{ forloop.counter }}-{{ n }}" aria-labelledby="tab-{{ forloop.counter }}-{{ n }}">
+
+        {% if r.kind == "matches" %}
+          {% if r.result.matches %}
+          <p class="muted small">Reglas YARA que coinciden con la muestra:</p>
+          <ul class="kv">
+            {% for m in r.result.matches %}
+            <li class="kv__row"><span class="kv__key mono">{{ m }}</span></li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted">Sin coincidencias de reglas YARA.</p>
+          {% endif %}
+
+        {% elif r.kind == "kv" %}
+          {% if r.result.items %}
+          <ul class="kv">
+            {% for key, val in r.result.items %}
+            <li class="kv__row">
+              <span class="kv__key">{{ key }}</span>
+              <span class="kv__val mono">{{ val }}</span>
+              <button class="copy-btn" type="button" data-copy="{{ val }}" aria-label="Copiar {{ key }}">
+                <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6 9 17l-5-5"/>
+                </svg>
+              </button>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted">Sin resultados para este comando.</p>
+          {% endif %}
+
+        {% elif r.kind == "lines" %}
+          <pre class="code-block">{% for line in r.result %}{{ line }}
+{% endfor %}</pre>
+
+        {% else %}
+          {% if r.result %}
+          <pre class="code-block">{{ r.result }}</pre>
+          {% else %}
+          <p class="muted">Sin salida para este comando.</p>
+          {% endif %}
+        {% endif %}
+
+      </section>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endfor %}
+{% endblock %}

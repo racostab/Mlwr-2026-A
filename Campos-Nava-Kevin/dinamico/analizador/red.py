@@ -1,26 +1,23 @@
-"""API de Oracle VirtualBox (VBoxManage) para dejar la VM Kali AISLADA.
+"""Red de la VM Kali con VirtualBox (VBoxManage): la deja AISLADA.
 
-`VBoxManage` es la CLI oficial de gestión de VirtualBox (la misma API que la GUI).
+`VBoxManage` es la CLI oficial de VirtualBox (la misma API que la GUI). Este
+módulo tiene UNA sola responsabilidad: la **red** de la VM. Para aislarla hace
+dos cosas:
 
-Idea del aislamiento (dos capas):
   1. Red **host-only** `vboxnet0` (host = 192.168.56.1): la VM tiene IP fija
-     192.168.56.10 (la fija el Vagrantfile como `private_network`) y solo ve al
+     192.168.56.10 (la fija el `Vagrantfile` como `private_network`) y solo ve al
      host por esa red privada.
-  2. Se **desconecta el NAT** de la VM (adaptador 1, modo `null`) tras provisionar,
-     así la VM se queda sin salida a internet pero conserva su IP host-only fija.
-     El firewall del host
-     (`dinamico/reglas_firewall/aislar_host.sh`) corta además lo que la VM
-     intente INICIAR hacia el host; solo deja pasar las respuestas a las sesiones
-     que abre el host (SSH/SFTP).
+  2. **Desconecta el NAT** (adaptador 1 → `null`) tras provisionar, así la VM se
+     queda sin salida a internet pero conserva su IP host-only fija.
 
-Flujo completo:  vagrant up (provisiona por NAT)  →  preparar_aislada()  →  la VM
-queda solo en host-only, sin internet, lista para el análisis dinámico.
+Las otras capas viven en sus propios módulos: el firewall del host en
+`firewall.py` y la comprobación de que todo quedó cerrado en `verificacion.py`.
+La fachada que une las tres es `aislamiento.py` (el runner importa de la fachada).
 
-    python3 dinamico/scripts/red_aislada.py [nombre_vm]   # aísla y arranca; imprime la IP
+    python3 dinamico/analizador/red.py [nombre_vm]   # aísla la red y arranca; imprime la IP
 """
 import subprocess
 import sys
-from pathlib import Path
 from shutil import which
 
 IFACE_HOSTONLY = "vboxnet0"
@@ -109,20 +106,6 @@ def preparar_aislada(nombre: str) -> str:
     return GUEST_IP
 
 
-def aplicar_firewall() -> bool:
-    """Aplica el firewall de aislamiento (reglas_firewall/aislar_host.sh). Pide sudo.
-
-    La salida del script va a stderr para que el stdout solo lleve la IP (lo que
-    captura setup.sh).
-    """
-    script = Path(__file__).resolve().parent.parent / "reglas_firewall" / "aislar_host.sh"
-    if not script.exists():
-        return False
-    return subprocess.run(["bash", str(script)], stdout=sys.stderr).returncode == 0
-
-
 if __name__ == "__main__":
     vm = sys.argv[1] if len(sys.argv) > 1 else "kali-malware-lab"
-    ip = preparar_aislada(vm)        # red host-only + sin NAT + arranque
-    aplicar_firewall()               # capa 2: corta lo que la VM inicie hacia el host
-    print(ip)                        # única línea en stdout (la IP)
+    print(preparar_aislada(vm))   # solo la red; el firewall lo aplica la fachada

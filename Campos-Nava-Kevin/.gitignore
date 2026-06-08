@@ -2,6 +2,7 @@ config.json
 .env
 lab_keys/
 samples/
+CLAUDE.md
 
 .vagrant/
 *.pyc

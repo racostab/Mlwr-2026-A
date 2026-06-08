@@ -173,51 +173,53 @@ echo "  La VM Kali queda fuera de Docker (necesita kernel propio)."
 echo ""
 read -rp "¿Configurar Kali ahora con Vagrant? [s/N]: " resp
 if [[ "$resp" =~ ^[Ss]$ ]]; then
-    # VirtualBox: proveedor que usa el Vagrantfile.
+    # Dependencias del dinámico: VirtualBox (proveedor del Vagrantfile) y Vagrant
+    # (repo oficial de HashiCorp; no está en los repos de Ubuntu). El resto del
+    # ciclo (crear VM → aislar → firewall → verificar) lo hace el módulo del
+    # dinámico, no este script.
     if ! command -v VBoxManage &>/dev/null; then
         warn "VirtualBox no instalado, instalando..."
         apt_install virtualbox || warn "Instala VirtualBox manualmente: https://www.virtualbox.org/wiki/Linux_Downloads"
     else
         ok "VirtualBox ya instalado"
     fi
-
-    # Vagrant (repo oficial de HashiCorp; no está en los repos de Ubuntu).
     install_vagrant || true
 
     if command -v vagrant &>/dev/null; then
-        info "Levantando la VM Kali (vagrant up, puede tardar la primera vez)..."
-        (cd "$SCRIPT_DIR/dinamico/maquina_virtual" && vagrant up)
-        KALI_STARTED=true
-
-        # Aislar: apagar, quitar el NAT (queda solo en host-only, sin internet) y
-        # arrancar headless. Tras esto la VM solo es accesible en 192.168.56.10.
-        info "Aislando la VM (host-only, sin internet)..."
-        VM_NAME=$(python3 -c "import json;print(json.load(open('$CONFIG_FILE'))['kali']['vm_name'])" 2>/dev/null || echo kali-malware-lab)
-        (cd "$SCRIPT_DIR/dinamico/maquina_virtual" && vagrant halt) || true
-        if IP_VM=$(python3 "$SCRIPT_DIR/dinamico/scripts/red_aislada.py" "$VM_NAME"); then
-            ok "VM aislada y encendida en $IP_VM (sin NAT)"
-            info "Conéctate con: bash dinamico/scripts/ssh_maquina_virtual.sh"
+        # Toda la orquestación del dinámico vive en su propia carpeta (modular):
+        # crea/provisiona la VM, la aísla (host-only sin NAT), aplica el firewall
+        # y VERIFICA la jaula (gate duro). Ver dinamico/scripts/configurar_dinamico.sh.
+        if bash "$SCRIPT_DIR/dinamico/scripts/configurar_dinamico.sh"; then
+            KALI_STARTED=true
+            ok "Lab dinámico listo y aislamiento verificado"
         else
-            warn "No se pudo aislar la VM automáticamente (revisa VirtualBox)"
+            warn "No se pudo dejar el lab dinámico aislado/verificado (revisa la salida de arriba)"
         fi
     else
-        warn "No se pudo dejar Vagrant disponible; configura Kali luego con 'vagrant up'"
+        warn "No se pudo dejar Vagrant disponible; configura Kali luego: bash dinamico/scripts/configurar_dinamico.sh"
     fi
 else
-    info "Saltado. Para configurar luego: vagrant up"
+    info "Saltado. Para configurar luego: bash dinamico/scripts/configurar_dinamico.sh"
 fi
 echo ""
 
-# ── Firewall del HOST: aislar el host de la VM (red host-only) ────────────────
-# Se aplica si se configuró Kali en este setup ($KALI_STARTED) o si ya existe la
-# interfaz host-only vboxnet0 (re-run, p. ej. tras reiniciar el host). Las reglas
-# de iptables NO persisten al reiniciar el host, por eso se reaplican aquí.
-if [ "$KALI_STARTED" = true ] || VBoxManage list hostonlyifs 2>/dev/null | grep -q '^Name:.*vboxnet0'; then
-    echo "-- Firewall del host: aislando el host de la VM (host-only) --"
-    if bash "$SCRIPT_DIR/dinamico/reglas_firewall/aislar_host.sh"; then
-        ok "Firewall aplicado en vboxnet0 (la VM no puede iniciar conexiones hacia el host)"
+# ── Firewall del HOST: protege TU máquina de la VM (lo aplica con sudo) ───────
+# Es la capa que descarta lo que la VM/malware intente INICIAR hacia el host
+# (escaneo, brute-force SSH). Las reglas de iptables NO persisten al reiniciar el
+# host, así que conviene (re)aplicarlas en cada setup. Se ofrece siempre que la
+# VM ya exista (vboxnet0 presente) y NO se haya reconfigurado Kali en este setup
+# (si SÍ se reconfiguró, configurar_dinamico.sh ya lo aplicó y verificó).
+if [ "$KALI_STARTED" != true ] && VBoxManage list hostonlyifs 2>/dev/null | grep -q '^Name:.*vboxnet0'; then
+    echo "-- Firewall del host (protege tu máquina de la VM) --"
+    read -rp "¿Aplicar el firewall del host ahora (pide sudo)? [S/n]: " resp_fw
+    if [[ ! "$resp_fw" =~ ^[Nn]$ ]]; then
+        if bash "$SCRIPT_DIR/dinamico/reglas_firewall/aislar_host.sh"; then
+            ok "Firewall del host aplicado en vboxnet0 (la VM no puede entrar a tu máquina)"
+        else
+            warn "No se pudo aplicar (córrelo a mano: bash dinamico/reglas_firewall/aislar_host.sh)"
+        fi
     else
-        warn "No se pudo aplicar el firewall (córrelo a mano: bash dinamico/reglas_firewall/aislar_host.sh)"
+        info "Omitido. Aplícalo luego: bash dinamico/reglas_firewall/aislar_host.sh"
     fi
     echo ""
 fi

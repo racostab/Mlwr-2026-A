@@ -1,14 +1,6 @@
 #!/bin/bash
 # Aísla el host de la VM en la red host-only.
 #
-# Descarta las conexiones NUEVAS que inicie la VM hacia el host (escaneo,
-# brute-force SSH, etc.), pero permite las RESPUESTAS a las sesiones que abre el
-# host (SSH/SFTP desde dynamic.py siguen funcionando). También bloquea que el
-# host enrute tráfico de la VM hacia ningún lado.
-#
-# Las reglas de iptables y la interfaz vboxnet0 NO sobreviven a un reinicio del
-# host: vuelve a correr este script al reanudar el lab.
-#
 # Uso:  bash dinamico/reglas_firewall/aislar_host.sh [interfaz] [subred]
 #       (por defecto: vboxnet0  192.168.56.0/24)
 set -e

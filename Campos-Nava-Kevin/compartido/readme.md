@@ -13,6 +13,10 @@ carpeta (`estatico/`, `dinamico/`).
 ### `sftp/conexion.py` — conexión SSH y transferencia SFTP
 
 - `conectar(host, port, user, key_path, label)` → cliente SSH (paramiko).
+- `conectar_con_reintentos(host, port, user, key_path, ...)` → como `conectar`,
+  pero reintenta hasta que el `sshd` responda (para una máquina recién arrancada,
+  p. ej. la VM Kali headless). Lo usan el runner dinámico y el verificador de
+  aislamiento.
 - `subir(client, local, remoto)` → `sftp.put` simple.
 - `asegurar_remoto(client, local, remoto)` → sube por SFTP **solo si falta**
   (mismo tamaño ⇒ mismo contenido, porque las muestras se nombran por sha256).
@@ -20,7 +24,7 @@ carpeta (`estatico/`, `dinamico/`).
 - `ejecutar(client, comando)` → corre un comando e imprime salida/errores.
 
 Lo usan el motor (`estatico/motor/servicios.py`, host→sandbox) y el runner
-dinámico (`dinamico/scripts/analizador_dinamico.py`, host→VM).
+dinámico (`dinamico/analizador/`, host→VM).
 
 ### `configuracion.py` — config del host
 

@@ -157,8 +157,9 @@ Campos-Nava-Kevin/
 ├── dinamico/   →  ANÁLISIS DINÁMICO (VM Kali, fuera de Docker)
 │   ├── maquina_virtual/  Vagrantfile (definición de la VM)
 │   ├── user_data/        provision_kali.sh (provisioning de la VM)
-│   ├── reglas_firewall/  aislar_host.sh (aísla el host de la VM)
-│   ├── scripts/          analizador_dinamico.py · control/ssh de la VM
+│   ├── reglas_firewall/  aislar_host.sh (firewall del host: aísla el host de la VM)
+│   ├── analizador/       motor (Python): red · firewall · verificacion · ejecucion · aislamiento (fachada) · analizador_dinamico
+│   ├── scripts/          configurar_dinamico.sh · control/ssh de la VM
 │   └── sftp/             puntero a compartido/sftp
 │
 ├── base_de_datos/  →  esquema PostgreSQL (init.sql)

@@ -2,7 +2,6 @@ import json
 import os
 from pathlib import Path
 
-# compartido/configuracion.py → la raíz del repo está dos niveles arriba.
 _ROOT = Path(__file__).resolve().parent.parent
 _cfg  = None
 

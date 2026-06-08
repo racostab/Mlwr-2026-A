@@ -35,7 +35,7 @@ Dos redes Docker (ver `docker-compose.yml`):
 | `web`    | `engine` | HTTP (`requests`) | `lab-frontend` | Subir muestras y pedir análisis. `ENGINE_URL=http://engine:8001` | `web/analizador/servicios.py` |
 | `engine` | `db`     | SQL (`psycopg`)   | `lab-frontend` | Guardar muestras y cachear reportes. `DATABASE_URL` | `estatico/motor/repositorio.py` |
 | `engine` | `sandbox`| SSH + SFTP (`paramiko`) | `lab-sandbox` | Enviar la muestra y ejecutar las herramientas | `estatico/motor/servicios.py` + `compartido/sftp/conexion.py` |
-| host     | VM Kali  | SSH + SFTP (`paramiko`) | host-only | Análisis dinámico: enviar la muestra y volcar memoria | `dinamico/scripts/analizador_dinamico.py` |
+| host     | VM Kali  | SSH + SFTP (`paramiko`) | host-only | Análisis dinámico: enviar la muestra y volcar memoria | `dinamico/analizador/` (`analizador_dinamico.py` · `ejecucion.py`) |
 
 Observaciones clave:
 - **`web` NO habla con `db` ni con `sandbox`.** Es un cliente delgado: todo pasa
@@ -44,7 +44,7 @@ Observaciones clave:
   su red es `internal`, aunque una muestra intente "llamar a casa", no tiene ruta.
 - La VM Kali no es Docker: vive en una red **host-only sin NAT** (`192.168.56.10`,
   host `192.168.56.1`), así que no tiene internet. Vagrant la provisiona por NAT
-  y luego `dinamico/scripts/red_aislada.py` le quita ese NAT. El firewall
+  y luego `dinamico/analizador/red.py` le quita ese NAT. El firewall
   (`dinamico/reglas_firewall/aislar_host.sh`) corta además lo que la VM inicie
   hacia el host; solo deja pasar las respuestas a las sesiones SSH/SFTP que abre
   el host.
@@ -77,9 +77,9 @@ engine: /samples/<sha256>  ──SFTP put──▶  sandbox: /samples/<sha256>  
 
 ### Lado dinámico: host → VM Kali
 
-En `dinamico/scripts/analizador_dinamico.py::analizar`:
+En `dinamico/analizador/analizador_dinamico.py::analizar` (transporte en `ejecucion.py`):
 
-1. `conectar(host, port, user, key)` abre SSH a la VM (mismo módulo compartido).
+1. `conectar_con_reintentos(host, port, user, key)` abre SSH a la VM (módulo compartido).
 2. `subir(client, local, remoto)` sube la muestra por SFTP al `$HOME` de la VM
    → `compartido/sftp/conexion.py::subir`.
 3. Se ejecuta la muestra acotada por tiempo y se vuelca su memoria.
@@ -92,9 +92,10 @@ sitio, sin duplicación):
 
 | Función           | Qué hace                        | Quién la llama |
 |-------------------|---------------------------------|----------------|
-| `conectar(...)`   | Abre el cliente SSH (paramiko)  | `estatico/motor/servicios.py::ssh` · `dinamico/scripts/analizador_dinamico.py::esperar_ssh` |
+| `conectar(...)`   | Abre el cliente SSH (paramiko)  | `estatico/motor/servicios.py::ssh` · base de `conectar_con_reintentos` |
+| `conectar_con_reintentos` | SSH reintentando hasta que responda | `dinamico/analizador/ejecucion.py::esperar_ssh` · `dinamico/analizador/verificacion.py` |
 | `asegurar_remoto` | Sube por SFTP **solo si falta** | `estatico/motor/servicios.py::ejecutar` |
-| `subir`           | Sube por SFTP siempre           | `dinamico/scripts/analizador_dinamico.py::analizar` |
+| `subir`           | Sube por SFTP siempre           | `dinamico/analizador/ejecucion.py::correr_y_volcar` |
 
 La **ejecución** de comandos no usa una función envoltorio: cada analizador llama
 `client.exec_command(...)` directamente (`estatico/catalogo/analizadores.py`), y el

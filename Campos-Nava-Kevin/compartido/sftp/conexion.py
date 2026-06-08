@@ -5,13 +5,14 @@ máquinas. Lo usan las dos familias de análisis:
 
 - Estático: `estatico/motor/servicios.py` → `conectar()` + `asegurar_remoto()`
   para enviar la muestra del motor al contenedor `sandbox`.
-- Dinámico: `dinamico/scripts/analizador_dinamico.py` → `conectar()` + `subir()`
-  para enviar la muestra del host a la VM Kali.
+- Dinámico: `dinamico/analizador/ejecucion.py` → `conectar_con_reintentos()` +
+  `subir()` para enviar la muestra del host a la VM Kali.
 
 Todas las funciones reciben un `client` de paramiko ya conectado (salvo
 `conectar`, que es quien lo crea).
 """
 import os
+import time
 
 import paramiko
 
@@ -35,6 +36,26 @@ def conectar(host: str, port: int, user: str, key_path: str, label: str = "host"
     client.connect(host, port=port, username=user, pkey=key, timeout=10)
     print(f"[+] Conectado a {label}")
     return client
+
+
+def conectar_con_reintentos(host: str, port: int, user: str, key_path: str,
+                            label: str = "host", intentos: int = 36,
+                            espera: int = 5) -> paramiko.SSHClient:
+    """Como `conectar`, pero reintenta hasta que el SSH responda.
+
+    Útil cuando la máquina destino se acaba de arrancar (VM Kali recién encendida
+    headless) y su `sshd` aún no acepta conexiones. Lo usan las dos familias que
+    abren SSH a una máquina que puede estar arrancando: el analizador dinámico y
+    el verificador de aislamiento. Lanza `TimeoutError` si agota los intentos.
+    """
+    ultimo = None
+    for _ in range(intentos):
+        try:
+            return conectar(host, port, user, key_path, label=label)
+        except Exception as e:  # noqa: BLE001 — reintento hasta timeout
+            ultimo = e
+            time.sleep(espera)
+    raise TimeoutError(f"SSH no respondió tras {intentos * espera}s: {ultimo}")
 
 
 def subir(client: paramiko.SSHClient, local: str, remoto: str) -> None:

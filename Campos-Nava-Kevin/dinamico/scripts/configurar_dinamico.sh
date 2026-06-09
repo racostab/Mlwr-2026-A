@@ -36,9 +36,31 @@ command -v vagrant    >/dev/null 2>&1 || { err "Vagrant no instalado (corre setu
 
 VM_NAME="$(python3 -c "import json;print(json.load(open('$CONFIG'))['kali']['vm_name'])" 2>/dev/null || echo kali-malware-lab)"
 
+# ── 1b. Limpiar la regla NAT 'ssh' residual (evita "NAT rule already exists") ─
+# El paso de aislamiento pone nic1=null; el siguiente `vagrant up` lo regresa a
+# nat y RE-CREA el reenvío SSH (2222→22), pero la regla anterior queda huérfana y
+# `vagrant up` falla por nombre duplicado. La quitamos ANTES de levantar (sólo si
+# la VM existe y está APAGADA; no se puede modificar en caliente). Idempotente.
+purgar_natpf_ssh() {
+    command -v VBoxManage >/dev/null 2>&1 || return 0
+    VBoxManage list vms 2>/dev/null | grep -q "\"$VM_NAME\"" || return 0          # no existe aún
+    VBoxManage list runningvms 2>/dev/null | grep -q "\"$VM_NAME\"" && return 0   # encendida: no tocar
+    if VBoxManage modifyvm "$VM_NAME" --natpf1 delete ssh 2>/dev/null; then
+        ok "Regla NAT 'ssh' residual eliminada (vagrant la recreará limpia)"
+    fi
+    return 0
+}
+
 # ── 2. Crear/provisionar la VM (con NAT, sin malware aún) ─────────────────────
+purgar_natpf_ssh
 info "Creando/provisionando la VM '$VM_NAME' (vagrant up; la 1ª vez tarda)..."
-(cd "$VM_DIR" && vagrant up)
+if ! (cd "$VM_DIR" && vagrant up); then
+    # Si aún chocó la regla NAT (quedó a medias), apaga, púrgala y reintenta UNA vez.
+    err "vagrant up falló; apago, limpio la regla NAT 'ssh' y reintento una vez..."
+    (cd "$VM_DIR" && vagrant halt) >/dev/null 2>&1 || true
+    purgar_natpf_ssh
+    (cd "$VM_DIR" && vagrant up)
+fi
 
 # ── 3. Apagar para poder quitar el NAT (no se puede en caliente) ─────────────
 info "Apagando la VM para reconfigurar la red..."

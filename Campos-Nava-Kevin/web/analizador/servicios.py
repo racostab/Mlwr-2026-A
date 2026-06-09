@@ -85,44 +85,79 @@ def _analizar(f, tools, etiquetas, min_len, cmds=None) -> dict:
     }
 
 
+def _indices_experimentos(request) -> list[int]:
+    """Índices de los experimentos presentes en el envío (campos `file_<n>`).
+
+    La web manda cada experimento con sus campos sufijados por un índice
+    (`file_0`, `mode_0`, `tools_0`…). Aquí se descubren esos índices a partir de
+    los grupos de archivos subidos, en orden.
+    """
+    return sorted(
+        int(k[5:]) for k in request.FILES
+        if k.startswith("file_") and k[5:].isdigit()
+    )
+
+
+def _experimento(request, i: int, catalogo: list[dict], etiquetas: dict) -> dict | None:
+    """Procesa un experimento (grupo de N muestras + su selección de comandos).
+
+    Devuelve `{"reports": [...], "errors": [...]}` o `None` si el grupo no trae
+    archivos. Replica el comportamiento de un análisis, pero acotado a los campos
+    sufijados con el índice `i` (cada experimento elige sus propios comandos).
+    """
+    files = request.FILES.getlist(f"file_{i}")
+    if not files:
+        return None
+
+    mode    = request.POST.get(f"mode_{i}", "default")
+    min_len = request.POST.get(f"min_len_{i}", "4")
+
+    # En modo personalizado corre lo que el usuario marque; si no marca nada
+    # (o en modo por defecto) corre el conjunto por defecto.
+    custom    = mode == "custom"
+    seleccion = request.POST.getlist(f"tools_{i}") if custom else []
+    # Comandos personalizados: los que el usuario escriba en la barra (uno por
+    # línea en `cmd_libre_<i>`; con JS son los chips añadidos). Se ejecutan por el
+    # comando guiado, que los valida contra la whitelist del backend.
+    cmds = []
+    if custom:
+        cmds += request.POST.get(f"cmd_libre_{i}", "").splitlines()
+    cmds = [c.strip() for c in cmds if c.strip()]
+    # Si solo eligió/escribió comandos, no forzamos el set por defecto.
+    tools = seleccion or ([] if cmds else _tools_por_defecto(catalogo))
+
+    reports, errors = [], []
+    for f in files:
+        try:
+            reports.append(_analizar(f, tools, etiquetas, min_len, cmds))
+        except Exception as e:
+            errors.append({"filename": f.name, "error": str(e)})
+    return {"reports": reports, "errors": errors}
+
+
 def index(request):
     catalogo = _catalogo()
-    files    = request.FILES.getlist("file")
 
-    if request.method == "POST" and files:
-        mode      = request.POST.get("mode", "default")
-        min_len   = request.POST.get("min_len", "4")
+    if request.method == "POST":
         etiquetas = {t["id"]: t["etiqueta"] for t in catalogo}
 
-        # En modo personalizado corre lo que el usuario marque; si no marca nada
-        # (o en modo por defecto) corre el conjunto por defecto.
-        custom = mode == "custom"
-        seleccion = request.POST.getlist("tools") if custom else []
-        # Comandos personalizados: los que el usuario escriba en la barra
-        # (uno por línea en `cmd_libre`; con JS son los chips añadidos).
-        cmds = []
-        if custom:
-            cmds += request.POST.get("cmd_libre", "").splitlines()
-        cmds = [c.strip() for c in cmds if c.strip()]
-        # Si solo eligió/escribió comandos, no forzamos el set por defecto.
-        tools = seleccion or ([] if cmds else _tools_por_defecto(catalogo))
+        # Cada experimento es un grupo independiente de muestras + sus comandos.
+        experimentos = []
+        for numero, i in enumerate(_indices_experimentos(request), start=1):
+            exp = _experimento(request, i, catalogo, etiquetas)
+            if exp is None:
+                continue
+            exp["numero"]     = numero
+            exp["n_muestras"] = len(exp["reports"])
+            experimentos.append(exp)
 
-        reports, errors = [], []
-        for f in files:
-            try:
-                reports.append(_analizar(f, tools, etiquetas, min_len, cmds))
-            except Exception as e:
-                errors.append({"filename": f.name, "error": str(e)})
+        if experimentos:
+            return render(request, "analizador/results.html",
+                          {"experimentos": experimentos})
 
-        if not reports:
-            msg = "; ".join(f"{e['filename']}: {e['error']}" for e in errors)
-            return render(request, "analizador/index.html", {"error": msg, "tools": catalogo})
-
-        return render(
-            request,
-            "analizador/results.html",
-            {"reports": reports, "errors": errors},
-        )
+        return render(request, "analizador/index.html",
+                      {"error": "Sube al menos una muestra para analizar.",
+                       "tools": catalogo})
 
     return render(request, "analizador/index.html", {"tools": catalogo})
 

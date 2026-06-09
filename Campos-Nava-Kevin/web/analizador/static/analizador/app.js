@@ -5,11 +5,18 @@
 (function () {
   'use strict';
 
-  /* ---- 1. Dropzone: arrastrar y soltar ---- */
-  var dz = document.querySelector('[data-dropzone]');
-  if (dz) {
+  /* ---- 1. Experimentos: cada bloque es independiente ----
+     Un "experimento" agrupa N muestras + sus comandos. Cada bloque trae su
+     propio dropzone, su toggle de modo y su barra de comandos. El usuario puede
+     añadir más experimentos (se clona el molde y se reindexan los campos:
+     file_0, mode_0… → file_1, mode_1…) o quitarlos. */
+
+  function initDropzone(dz) {
+    if (!dz || dz.dataset.ready) return;
+    dz.dataset.ready = '1';
     var input = dz.querySelector('[data-dropzone-input]');
     var nameEl = dz.querySelector('[data-dropzone-name]');
+    if (!input) return;
 
     function reflectFile() {
       if (input.files && input.files.length) {
@@ -46,6 +53,164 @@
         reflectFile();
       }
     });
+  }
+
+  function initMode(block) {
+    var radios = block.querySelectorAll('[data-mode]');
+    var panel = block.querySelector('[data-custom-panel]');
+    if (!radios.length || !panel) return;
+    var sync = function () {
+      var custom = false;
+      Array.prototype.forEach.call(radios, function (r) {
+        if (r.checked && r.value === 'custom') custom = true;
+      });
+      panel.classList.toggle('is-visible', custom);
+    };
+    Array.prototype.forEach.call(radios, function (r) {
+      r.addEventListener('change', sync);
+    });
+    sync();
+  }
+
+  function initCmd(block) {
+    var cmdInput = block.querySelector('[data-cmd-input]');
+    var cmdAdd = block.querySelector('[data-cmd-add]');
+    var cmdChips = block.querySelector('[data-cmd-chips]');
+    var cmdStore = block.querySelector('[data-cmd-store]');
+    if (!cmdInput || !cmdChips || !cmdStore) return;
+
+    var syncStore = function () {
+      var vals = Array.prototype.map.call(
+        cmdChips.querySelectorAll('[data-cmd-value]'),
+        function (el) { return el.getAttribute('data-cmd-value'); }
+      );
+      cmdStore.value = vals.join('\n');
+    };
+    var addCmd = function () {
+      var v = cmdInput.value.trim();
+      if (!v) return;
+      var li = document.createElement('li');
+      li.className = 'chip';
+      li.setAttribute('data-cmd-value', v);
+
+      var txt = document.createElement('span');
+      txt.className = 'chip__text mono';
+      txt.textContent = v;
+
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'chip__remove';
+      rm.setAttribute('aria-label', 'Quitar comando');
+      rm.innerHTML = '&times;';
+
+      li.appendChild(txt);
+      li.appendChild(rm);
+      cmdChips.appendChild(li);
+      cmdInput.value = '';
+      cmdInput.focus();
+      syncStore();
+    };
+
+    if (cmdAdd) cmdAdd.addEventListener('click', addCmd);
+    cmdInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); addCmd(); }
+    });
+    cmdChips.addEventListener('click', function (e) {
+      var btn = e.target.closest('.chip__remove');
+      if (!btn) return;
+      btn.parentNode.remove();
+      syncStore();
+    });
+
+    // Con JS activo el textarea es solo almacén: parte de los chips actuales.
+    syncStore();
+  }
+
+  function initExperiment(block) {
+    initDropzone(block.querySelector('[data-dropzone]'));
+    initMode(block);
+    initCmd(block);
+  }
+
+  var wrap = document.querySelector('[data-experiments]');
+  if (wrap) {
+    var blocks = function () {
+      return Array.prototype.slice.call(wrap.querySelectorAll('[data-experiment]'));
+    };
+
+    // Reasigna los names sufijados (file_0, mode_0…) según la posición y
+    // actualiza la etiqueta y la visibilidad del botón de quitar.
+    var reindex = function () {
+      var bs = blocks();
+      bs.forEach(function (block, i) {
+        Array.prototype.forEach.call(
+          block.querySelectorAll('[data-field]'),
+          function (el) { el.name = el.getAttribute('data-field') + '_' + i; }
+        );
+        var label = block.querySelector('[data-experiment-label]');
+        if (label) label.textContent = 'Experimento ' + (i + 1);
+      });
+      bs.forEach(function (block) {
+        var rm = block.querySelector('[data-experiment-remove]');
+        if (rm) rm.hidden = bs.length <= 1;
+      });
+    };
+
+    // Deja un bloque clonado en limpio (sin archivos, modo por defecto, sin chips).
+    var resetBlock = function (block) {
+      var dz = block.querySelector('[data-dropzone]');
+      if (dz) {
+        dz.removeAttribute('data-ready');
+        dz.classList.remove('has-file', 'is-dragover');
+        var nm = dz.querySelector('[data-dropzone-name]');
+        if (nm) { nm.hidden = true; nm.textContent = ''; }
+      }
+      var fileInput = block.querySelector('[data-dropzone-input]');
+      if (fileInput) fileInput.value = '';
+      Array.prototype.forEach.call(block.querySelectorAll('[data-mode]'), function (r) {
+        r.checked = r.value === 'default';
+      });
+      Array.prototype.forEach.call(
+        block.querySelectorAll('input[type="checkbox"]'),
+        function (c) { c.checked = false; }
+      );
+      var ml = block.querySelector('[data-field="min_len"]');
+      if (ml) ml.value = '4';
+      var chips = block.querySelector('[data-cmd-chips]');
+      if (chips) chips.innerHTML = '';
+      var store = block.querySelector('[data-cmd-store]');
+      if (store) store.value = '';
+      var cmdIn = block.querySelector('[data-cmd-input]');
+      if (cmdIn) cmdIn.value = '';
+      var panel = block.querySelector('[data-custom-panel]');
+      if (panel) panel.classList.remove('is-visible');
+    };
+
+    var addBtn = document.querySelector('[data-experiment-add]');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        var first = wrap.querySelector('[data-experiment]');
+        if (!first) return;
+        var clone = first.cloneNode(true);
+        resetBlock(clone);
+        wrap.appendChild(clone);
+        reindex();
+        initExperiment(clone);
+        clone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+
+    wrap.addEventListener('click', function (e) {
+      var rm = e.target.closest('[data-experiment-remove]');
+      if (!rm) return;
+      if (blocks().length <= 1) return;
+      var block = rm.closest('[data-experiment]');
+      if (block) block.remove();
+      reindex();
+    });
+
+    blocks().forEach(initExperiment);
+    reindex();
   }
 
   /* ---- 2. Overlay de carga al enviar el análisis ---- */
@@ -205,81 +370,5 @@
     sidebar.addEventListener('click', function (e) {
       if (e.target.closest('a')) setSidebar(false);
     });
-  }
-
-  /* ---- 9. Modo de análisis: muestra/oculta los extras ---- */
-  var modeRadios = document.querySelectorAll('[data-mode]');
-  var customPanels = document.querySelectorAll('[data-custom-panel]');
-  if (modeRadios.length && customPanels.length) {
-    var syncMode = function () {
-      var custom = false;
-      Array.prototype.forEach.call(modeRadios, function (r) {
-        if (r.checked && r.value === 'custom') custom = true;
-      });
-      Array.prototype.forEach.call(customPanels, function (p) {
-        p.classList.toggle('is-visible', custom);
-      });
-    };
-    Array.prototype.forEach.call(modeRadios, function (r) {
-      r.addEventListener('change', syncMode);
-    });
-    syncMode();
-  }
-
-  /* ---- 10. Barra para añadir comandos personalizados (chips) ----
-     Sin JS, el usuario escribe en el textarea de respaldo (uno por línea).
-     Con JS, escribe en la barra y cada comando se vuelve un chip; el textarea
-     queda oculto y se rellena con los chips (separados por salto de línea), que
-     es lo que el backend espera en `cmd_libre`. */
-  var cmdInput = document.querySelector('[data-cmd-input]');
-  var cmdAdd = document.querySelector('[data-cmd-add]');
-  var cmdChips = document.querySelector('[data-cmd-chips]');
-  var cmdStore = document.querySelector('[data-cmd-store]');
-  if (cmdInput && cmdChips && cmdStore) {
-    var syncStore = function () {
-      var vals = Array.prototype.map.call(
-        cmdChips.querySelectorAll('[data-cmd-value]'),
-        function (el) { return el.getAttribute('data-cmd-value'); }
-      );
-      cmdStore.value = vals.join('\n');
-    };
-    var addCmd = function () {
-      var v = cmdInput.value.trim();
-      if (!v) return;
-      var li = document.createElement('li');
-      li.className = 'chip';
-      li.setAttribute('data-cmd-value', v);
-
-      var txt = document.createElement('span');
-      txt.className = 'chip__text mono';
-      txt.textContent = v;
-
-      var rm = document.createElement('button');
-      rm.type = 'button';
-      rm.className = 'chip__remove';
-      rm.setAttribute('aria-label', 'Quitar comando');
-      rm.innerHTML = '&times;';
-
-      li.appendChild(txt);
-      li.appendChild(rm);
-      cmdChips.appendChild(li);
-      cmdInput.value = '';
-      cmdInput.focus();
-      syncStore();
-    };
-
-    if (cmdAdd) cmdAdd.addEventListener('click', addCmd);
-    cmdInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { e.preventDefault(); addCmd(); }
-    });
-    cmdChips.addEventListener('click', function (e) {
-      var btn = e.target.closest('.chip__remove');
-      if (!btn) return;
-      btn.parentNode.remove();
-      syncStore();
-    });
-
-    // Con JS activo el textarea es solo almacén: arranca vacío.
-    cmdStore.value = '';
   }
 })();

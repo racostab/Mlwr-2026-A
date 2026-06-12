@@ -17,6 +17,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="{% static 'analizador/styles.css' %}?v=3">
+  <style>[x-cloak]{display:none!important}</style>
 </head>
 <body>
   <a class="skip-link" href="#main">Saltar al contenido</a>
@@ -77,7 +78,9 @@
           <p class="nav-group__label">Laboratorio</p>
           <ul class="nav-group__list">
             <li>
-              <span class="nav-item is-disabled" aria-disabled="true">
+              <a class="nav-item {% if request.resolver_match.url_name == 'dynamic' %}is-active{% endif %}"
+                 href="{% url 'dynamic' %}"
+                 {% if request.resolver_match.url_name == 'dynamic' %}aria-current="page"{% endif %}>
                 <span class="nav-item__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                        stroke-linecap="round" stroke-linejoin="round">
@@ -86,8 +89,7 @@
                   </svg>
                 </span>
                 <span class="nav-item__text">Análisis dinámico</span>
-                <span class="nav-item__badge">Pronto</span>
-              </span>
+              </a>
             </li>
             <li>
               <a class="nav-item {% if request.resolver_match.url_name == 'rules' %}is-active{% endif %}"
@@ -215,6 +217,9 @@
     </div>
   </div>
 
-  <script src="{% static 'analizador/app.js' %}?v=3" defer></script>
+  {# Alpine.js: reactividad declarativa para el constructor de experimentos.
+     Carga por CDN (el navegador del analista tiene internet; el sandbox no). #}
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <script src="{% static 'analizador/app.js' %}?v=4" defer></script>
 </body>
 </html>

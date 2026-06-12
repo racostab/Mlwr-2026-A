@@ -66,6 +66,17 @@ fi
 info "Apagando la VM para reconfigurar la red..."
 (cd "$VM_DIR" && vagrant halt) || true
 
+# ── 3b. Snapshot 'limpio': estado base recién provisionado, SIN malware ───────
+# Punto de retorno al que el runner restaura ANTES de cada detonación, para que
+# ninguna muestra herede residuos de la anterior. Se toma aquí —VM apagada y
+# limpia— de forma automática; idempotente (si ya existe, no hace nada).
+info "Tomando el snapshot 'limpio' (estado base sin malware)..."
+if python3 "$RAIZ/dinamico/analizador/snapshot.py" crear "$VM_NAME" >/dev/null 2>&1; then
+    ok "Snapshot 'limpio' listo (se restaura antes de cada detonación)"
+else
+    err "No se pudo tomar el snapshot 'limpio'; las detonaciones no podrán restaurar estado."
+fi
+
 # ── 4. Aislar: host-only sin NAT + arranque headless + firewall del host ─────
 # La fachada imprime SOLO la IP por stdout (su log va a stderr).
 info "Aislando la VM (host-only, sin internet) y aplicando el firewall del host..."

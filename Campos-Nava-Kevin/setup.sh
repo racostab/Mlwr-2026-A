@@ -6,6 +6,7 @@ KEY_DIR="$SCRIPT_DIR/lab_keys"
 ENV_FILE="$SCRIPT_DIR/.env"
 LAB_STARTED=false
 KALI_STARTED=false
+DYNAMIC_PID=""
 
 ok()   { echo "[+] $*"; }
 info() { echo "[*] $*"; }
@@ -15,6 +16,7 @@ cleanup() {
     echo ""
     info "Apagando el lab..."
     cd "$SCRIPT_DIR"
+    [ -n "$DYNAMIC_PID" ] && kill "$DYNAMIC_PID" 2>/dev/null || true
     $KALI_STARTED && (cd "$SCRIPT_DIR/dinamico/maquina_virtual" && vagrant halt) 2>/dev/null || true
     docker compose down
     exit 0
@@ -149,10 +151,13 @@ echo ""
 echo "-- Paquete Python del lab --"
 command -v pip3 >/dev/null || apt_install python3-pip || true
 if command -v pip3 >/dev/null; then
-    pip3 install -e "$SCRIPT_DIR" >/dev/null 2>&1 \
-      || pip3 install --user --break-system-packages -e "$SCRIPT_DIR" >/dev/null 2>&1 \
-      && ok "paquete compartido instalado (editable)" \
-      || warn "no se pudo instalar compartido en el host (solo afecta al análisis dinámico)"
+    # Se instala con el extra [dinamico]: además de `compartido` (paramiko), trae
+    # fastapi/uvicorn/multipart para el servicio host del análisis dinámico, así el
+    # usuario no instala nada a mano para usar el dinámico desde la web.
+    pip3 install -e "${SCRIPT_DIR}[dinamico]" >/dev/null 2>&1 \
+      || pip3 install --user --break-system-packages -e "${SCRIPT_DIR}[dinamico]" >/dev/null 2>&1 \
+      && ok "paquete compartido + deps del dinámico instalados (editable)" \
+      || warn "no se pudo instalar el paquete en el host (solo afecta al análisis dinámico)"
 fi
 echo ""
 
@@ -224,15 +229,71 @@ if [ "$KALI_STARTED" != true ] && VBoxManage list hostonlyifs 2>/dev/null | grep
     echo ""
 fi
 
+# ── Validación OBLIGATORIA del gate de aislamiento ───────────────────────────
+# Si la VM Kali existe, se prueba con hechos que la jaula funciona ANTES de dar
+# el lab por listo: camino feliz (las 4 comprobaciones pasan) + camino de fallo
+# (si vuelve el NAT, el gate lo detecta). La comprobación del firewall usa
+# `sudo -n`, así que se piden credenciales sudo AQUÍ (interactivo) para que la
+# validación corra bien. El canario queda listo en /tmp/canario_aislamiento.sh,
+# pero su detonación de extremo a extremo es deliberadamente MANUAL.
+VM_NAME="$(python3 -c "import json;print(json.load(open('$CONFIG_FILE'))['kali']['vm_name'])" 2>/dev/null || echo kali-malware-lab)"
+VM_EXISTE=false
+GATE_OK=true
+if command -v VBoxManage >/dev/null 2>&1 && VBoxManage list vms 2>/dev/null | grep -q "\"$VM_NAME\""; then
+    VM_EXISTE=true
+fi
+if $VM_EXISTE; then
+    echo "-- Validación del aislamiento (obligatoria) --"
+    info "Se piden credenciales sudo (el gate confirma el firewall con 'sudo -n')..."
+    sudo -v || warn "No se pudieron cachear credenciales sudo; el gate fallará en el firewall"
+    if bash "$SCRIPT_DIR/dinamico/scripts/validar_aislamiento.sh" "$VM_NAME"; then
+        ok "Gate de aislamiento validado (canario listo en /tmp/canario_aislamiento.sh)"
+    else
+        GATE_OK=false
+        warn "FALLO en la validación del aislamiento: NO detones muestras."
+        warn "Revisa la salida de arriba y vuelve a correr: bash dinamico/scripts/validar_aislamiento.sh"
+    fi
+    echo ""
+fi
+
+# ── Servicio dinámico (host) en segundo plano ────────────────────────────────
+# La web (en Docker) dispara detonaciones llamando a este servicio del host
+# (necesita VBoxManage/iptables, que no van en un contenedor). Se arranca solo si
+# hay VirtualBox y las deps del dinámico, para que el usuario NO tenga que abrir
+# otra terminal. Se apaga en el cleanup (Ctrl+C).
+if ! $GATE_OK; then
+    warn "Servicio dinámico NO arrancado: la validación del aislamiento falló."
+elif command -v VBoxManage >/dev/null 2>&1 && python3 -c "import fastapi, uvicorn, multipart" 2>/dev/null; then
+    echo "-- Servicio dinámico (host) --"
+    nohup bash "$SCRIPT_DIR/dinamico/scripts/servicio_dinamico.sh" >/tmp/mlwr_dinamico.log 2>&1 &
+    DYNAMIC_PID=$!
+    sleep 1
+    if kill -0 "$DYNAMIC_PID" 2>/dev/null; then
+        ok "Servicio dinámico en http://localhost:8002 (log: /tmp/mlwr_dinamico.log)"
+    else
+        DYNAMIC_PID=""
+        warn "El servicio dinámico no arrancó; mira /tmp/mlwr_dinamico.log o córrelo a mano: bash dinamico/scripts/servicio_dinamico.sh"
+    fi
+    echo ""
+fi
+
 # ── resumen ───────────────────────────────────────────────────────────────────
 
 WEB_PORT=$(grep ^WEB_PORT "$ENV_FILE" | cut -d= -f2)
 echo "================================================="
 echo "  Setup completo"
 echo ""
-echo "  Web    → http://localhost:${WEB_PORT:-8000}   (sube muestras y elige comandos)"
+echo "  Web    → http://localhost:${WEB_PORT:-8000}   (estático: sube muestras y elige comandos)"
+echo "  Web    → http://localhost:${WEB_PORT:-8000}/dynamic/   (dinámico: detona en la VM aislada)"
 echo "  Engine → http://localhost:8001        (API REST)"
+[ -n "$DYNAMIC_PID" ] && echo "  Dyn    → http://localhost:8002        (servicio dinámico del host)"
 echo ""
+if $VM_EXISTE && $GATE_OK; then
+    echo "Pendiente MANUAL (prueba de extremo a extremo del aislamiento):"
+    echo "  python3 dinamico/analizador/analizador_dinamico.py /tmp/canario_aislamiento.sh 10"
+    echo "  (en dynamic_output/<ts>/stdout.log no debe aparecer ninguna FUGA)"
+    echo ""
+fi
 echo "Útil:"
 echo "  docker compose logs -f engine     # ver logs del engine"
 echo "  docker compose ps                 # estado de los contenedores"

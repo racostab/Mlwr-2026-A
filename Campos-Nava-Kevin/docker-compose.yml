@@ -73,6 +73,11 @@ services:
       - "${WEB_PORT:-8000}:8000"
     environment:
       ENGINE_URL: http://engine:8001
+      # El análisis dinámico corre en el HOST (necesita VBoxManage + iptables),
+      # no en Docker. La web lo alcanza por el gateway del host.
+      DYNAMIC_URL: ${DYNAMIC_URL:-http://host.docker.internal:8002}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - engine
     restart: unless-stopped

@@ -30,16 +30,23 @@
 </div>
 {% endif %}
 
-<form class="upload-form" method="post" enctype="multipart/form-data" data-loading-form>
+{# Catálogo de comandos del engine, para que Alpine pinte los checkboxes. #}
+{{ tools|json_script:"catalogo-data" }}
+
+{# El constructor de experimentos/lotes es ahora reactivo (Alpine.js): añadir y
+   quitar experimentos, marcar comandos y gestionar chips sin recargar. Los
+   `name` se sufijan con un id estable (file_<id>, mode_<id>…) — el backend sigue
+   descubriéndolos igual (`_indices_experimentos`), no cambia nada del servidor. #}
+<form class="upload-form" method="post" enctype="multipart/form-data" data-loading-form
+      x-data="experimentos()" x-init="init()" x-cloak>
   {% csrf_token %}
 
-  <div data-experiments>
-    {# ---- Experimento (bloque repetible; el JS clona/reindexa este molde) ---- #}
-    <section class="card experiment" data-experiment>
+  <template x-for="(it, idx) in items" :key="it.id">
+    <section class="card experiment">
       <header class="experiment__head">
-        <span class="experiment__badge" data-experiment-label>Experimento 1</span>
-        <button class="experiment__remove" type="button" data-experiment-remove
-                hidden aria-label="Quitar este experimento">
+        <span class="experiment__badge" x-text="'Experimento ' + (idx + 1)"></span>
+        <button class="experiment__remove" type="button" x-show="items.length > 1"
+                @click="remove(idx)" aria-label="Quitar este experimento">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -47,7 +54,16 @@
         </button>
       </header>
 
-      <label class="dropzone" data-dropzone>
+      <label class="dropzone" :class="{ 'has-file': it.fileLabel }"
+             @dragover.prevent="$el.classList.add('is-dragover')"
+             @dragleave.prevent="$el.classList.remove('is-dragover')"
+             @drop.prevent="
+               var inp = $el.querySelector('input[type=file]');
+               inp.files = $event.dataTransfer.files;
+               it.fileLabel = inp.files.length === 1
+                 ? inp.files[0].name
+                 : inp.files.length + ' archivos seleccionados';
+               $el.classList.remove('is-dragover')">
         <span class="dropzone__icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round">
@@ -57,9 +73,11 @@
         </span>
         <span class="dropzone__title">Arrastra las muestras aquí</span>
         <span class="dropzone__hint">o <span class="dropzone__link">selecciona desde tu equipo</span> (una o varias)</span>
-        <span class="dropzone__filename" data-dropzone-name hidden></span>
-        <input class="visually-hidden" type="file" name="file_0" data-field="file"
-               multiple required data-dropzone-input>
+        <span class="dropzone__filename" x-show="it.fileLabel" x-text="it.fileLabel"></span>
+        <input class="visually-hidden" type="file" :name="'file_' + it.id" multiple required
+               @change="it.fileLabel = $event.target.files.length === 1
+                          ? $event.target.files[0].name
+                          : $event.target.files.length + ' archivos seleccionados'">
       </label>
 
       <fieldset class="analysis">
@@ -67,8 +85,8 @@
 
         <div class="modes">
           <label class="mode">
-            <input class="visually-hidden" type="radio" name="mode_0" data-field="mode"
-                   value="default" checked data-mode>
+            <input class="visually-hidden" type="radio" :name="'mode_' + it.id"
+                   value="default" x-model="it.mode">
             <span class="mode__radio" aria-hidden="true"></span>
             <span class="mode__body">
               <span class="mode__name">Análisis por defecto</span>
@@ -76,8 +94,8 @@
             </span>
           </label>
           <label class="mode">
-            <input class="visually-hidden" type="radio" name="mode_0" data-field="mode"
-                   value="custom" data-mode>
+            <input class="visually-hidden" type="radio" :name="'mode_' + it.id"
+                   value="custom" x-model="it.mode">
             <span class="mode__radio" aria-hidden="true"></span>
             <span class="mode__body">
               <span class="mode__name">Análisis personalizado</span>
@@ -86,26 +104,32 @@
           </label>
         </div>
 
-        <div class="extras" data-custom-panel>
+        <div class="extras" :class="{ 'is-visible': it.mode === 'custom' }">
           <p class="extras__label">Comandos disponibles</p>
 
-          {% for t in tools %}
-          <label class="extra">
-            <input class="visually-hidden" type="checkbox" name="tools_0" data-field="tools" value="{{ t.id }}">
-            <span class="extra__check" aria-hidden="true"></span>
-            <span class="extra__text">
-              <span class="extra__name">{{ t.etiqueta }}{% if t.por_defecto %} <span class="tag-default">por defecto</span>{% endif %}</span>
-              <span class="extra__desc">id: <code>{{ t.id }}</code></span>
-            </span>
-          </label>
-          {% empty %}
-          <p class="muted">No se pudo obtener el catálogo de comandos del engine.</p>
-          {% endfor %}
+          <template x-if="!tools.length">
+            <p class="muted">No se pudo obtener el catálogo de comandos del engine.</p>
+          </template>
+
+          <template x-for="t in tools" :key="t.id">
+            <label class="extra">
+              <input class="visually-hidden" type="checkbox" :name="'tools_' + it.id"
+                     :value="t.id" x-model="it.tools">
+              <span class="extra__check" aria-hidden="true"></span>
+              <span class="extra__text">
+                <span class="extra__name">
+                  <span x-text="t.etiqueta"></span>
+                  <template x-if="t.por_defecto"><span class="tag-default">por defecto</span></template>
+                </span>
+                <span class="extra__desc">id: <code x-text="t.id"></code></span>
+              </span>
+            </label>
+          </template>
 
           <div class="extra__sub">
             <label>Longitud mínima (strings)
-              <input class="input" type="number" name="min_len_0" data-field="min_len"
-                     value="4" min="1" max="100">
+              <input class="input" type="number" :name="'min_len_' + it.id"
+                     x-model="it.min_len" min="1" max="100">
             </label>
           </div>
 
@@ -119,17 +143,26 @@
                   <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
                 </svg>
               </span>
-              <input class="cmdbar__input" type="text" autocomplete="off"
-                     placeholder="objdump -d   ·   nm -D   ·   strings -n 10   —   Enter para añadir"
-                     data-cmd-input>
-              <button class="cmdbar__btn" type="button" data-cmd-add>Añadir</button>
+              <input class="cmdbar__input" type="text" autocomplete="off" x-model="it.cmdInput"
+                     @keydown.enter.prevent="addCmd(it)"
+                     placeholder="objdump -d   ·   nm -D   ·   strings -n 10   —   Enter para añadir">
+              <button class="cmdbar__btn" type="button" @click="addCmd(it)">Añadir</button>
             </div>
 
-            <ul class="cmdchips" data-cmd-chips></ul>
+            <ul class="cmdchips">
+              <template x-for="(c, ci) in it.cmds" :key="ci">
+                <li class="chip">
+                  <span class="chip__text mono" x-text="c"></span>
+                  <button type="button" class="chip__remove" @click="it.cmds.splice(ci, 1)"
+                          aria-label="Quitar comando">&times;</button>
+                </li>
+              </template>
+            </ul>
 
-            <textarea class="input mono cmdadd__fallback" name="cmd_libre_0" data-field="cmd_libre"
-                      rows="3" data-cmd-store
-                      placeholder="Un comando por línea&#10;objdump -d&#10;nm -D"></textarea>
+            {# Almacén oculto: los chips se serializan aquí (uno por línea), que es
+               lo que lee el backend en cmd_libre_<id>. #}
+            <textarea class="visually-hidden" :name="'cmd_libre_' + it.id"
+                      x-text="it.cmds.join('\n')" tabindex="-1" aria-hidden="true"></textarea>
 
             <p class="muted small">
               Cada comando corre en el sandbox aislado y la ruta de la muestra se añade
@@ -146,9 +179,9 @@
         </p>
       </fieldset>
     </section>
-  </div>
+  </template>
 
-  <button class="btn btn--ghost btn--block" type="button" data-experiment-add>
+  <button class="btn btn--ghost btn--block" type="button" @click="add()">
     <span class="btn__icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round">
@@ -168,4 +201,33 @@
     Analizar
   </button>
 </form>
+
+<script>
+  // Componente Alpine del constructor de experimentos. Se registra en alpine:init
+  // (antes de que Alpine procese el DOM). El catálogo viene serializado por Django.
+  document.addEventListener('alpine:init', function () {
+    var tools = [];
+    try { tools = JSON.parse(document.getElementById('catalogo-data').textContent) || []; }
+    catch (e) { tools = []; }
+
+    Alpine.data('experimentos', function () {
+      return {
+        tools: tools,
+        seq: 1,                       // id estable e incremental por experimento
+        items: [],
+        init: function () { this.add(); },
+        nuevo: function () {
+          return { id: this.seq++, mode: 'default', tools: [],
+                   min_len: 4, cmds: [], cmdInput: '', fileLabel: '' };
+        },
+        add: function () { this.items.push(this.nuevo()); },
+        remove: function (idx) { if (this.items.length > 1) this.items.splice(idx, 1); },
+        addCmd: function (it) {
+          var v = (it.cmdInput || '').trim();
+          if (v) { it.cmds.push(v); it.cmdInput = ''; }
+        }
+      };
+    });
+  });
+</script>
 {% endblock %}

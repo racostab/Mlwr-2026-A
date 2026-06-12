@@ -10,8 +10,9 @@ Nota sobre ptrace: strace mantiene la muestra bajo ptrace y gcore/procdump
 también lo usan, pero solo puede haber UN tracer a la vez; por eso se mata strace
 (el kernel desengancha la muestra, que sigue viva) justo antes del volcado.
 
-El volcado usa gcore (de gdb); requiere `ptrace_scope=0` y sudo NOPASSWD para el
-usuario `kali` (lo deja listo `dinamico/user_data/provision_kali.sh`).
+El volcado usa procdump (preferido) con gcore (de gdb) de respaldo; requiere
+`ptrace_scope=0` y sudo NOPASSWD para el usuario `kali` (los deja listos, junto
+con ambas herramientas, `dinamico/user_data/provision_kali.sh`).
 """
 import os
 import time
@@ -59,10 +60,18 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     # Ejecutar la muestra BAJO strace para registrar sus syscalls (connect/open/
     # execve/...). strace queda como proceso padre y la muestra como su hijo, así
     # que $! es el PID de strace; el PID real del binario es su hijo.
+    #
+    # OJO: strace se lanza como comando SIMPLE en segundo plano (con `;`, NO con
+    # `cd && strace &`). Un `&&` haría que bash backgroundee la lista en un
+    # SUBSHELL que hereda el stdout del canal SSH y lo mantiene abierto mientras
+    # strace viva → `ejecutar_remoto` se colgaría en `stdout.read()` esperando un
+    # EOF que no llega (el runner nunca avanzaría al volcado). Redirigimos los tres
+    # descriptores de strace (stdin←/dev/null, stdout/stderr→ficheros) para que no
+    # retenga el canal; así bash sale tras `echo $!` y el read recibe su EOF.
     print(f"[*] Ejecutando la muestra bajo strace (la dejo correr {segundos}s antes del volcado)...")
     run = (
-        f"cd {home} && strace -f -tt -T -o {dump_dir}/strace.log {remoto} "
-        f">{dump_dir}/stdout.log 2>{dump_dir}/stderr.log & echo $!"
+        f"cd {home}; strace -f -tt -T -o {dump_dir}/strace.log {remoto} "
+        f"</dev/null >{dump_dir}/stdout.log 2>{dump_dir}/stderr.log & echo $!"
     )
     tracer = ejecutar_remoto(client, run, mostrar=False)
     tracer = tracer if tracer.isdigit() else ""
@@ -95,18 +104,35 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     # (solo un tracer a la vez). Matamos strace: el kernel DESENGANCHA a la muestra
     # —que sigue viva— y se vacía/cierra strace.log, dejando el ptrace libre para
     # el volcado.
+    #
+    # SIGTERM no siempre termina a strace (puede quedar bloqueado en el detach del
+    # tracee y seguir reteniendo el ptrace → gcore/procdump fallan con "only one
+    # tracer"). Por eso escalamos: SIGTERM, breve espera y, si sigue vivo, SIGKILL.
+    # Al morir el tracer el kernel desengancha a la muestra, que sigue viva (strace
+    # no activa PTRACE_O_EXITKILL).
     if tracer:
-        ejecutar_remoto(client, f"kill {tracer} 2>/dev/null; true", mostrar=False)
+        ejecutar_remoto(
+            client,
+            f"kill {tracer} 2>/dev/null; "
+            f"for _ in 1 2 3; do kill -0 {tracer} 2>/dev/null || break; sleep 0.3; done; "
+            f"kill -9 {tracer} 2>/dev/null; true",
+            mostrar=False,
+        )
         time.sleep(1)  # esperar a que el kernel complete el detach
 
     if vivo != "si":
         print("[!] No hay proceso vivo de la muestra; no se pudo volcar su memoria.")
     else:
         print(f"[*] Volcando memoria del PID {target} con procdump...")
-        ejecutar_remoto(client, f"sudo -n procdump -n 1 {target} {dump_dir} 2>&1")
-        # Si procdump no está o no generó archivo, intentar gcore.
+        # procdump (Sysinternals para Linux) exige el PID con -p y el prefijo de
+        # salida con -o; -n 1 escribe un solo volcado y -s 1 lo dispara tras 1s de
+        # vida (no 10 por defecto). El volcado queda en {dump_dir}/dump_*.
+        ejecutar_remoto(client, f"sudo -n procdump -s 1 -n 1 -p {target} -o {dump_dir}/dump 2>&1")
+        # ¿Generó procdump algún volcado? Cuenta cualquier archivo del dump_dir que
+        # NO sea uno de los logs (procdump no usa extensión .core/.dmp fija).
         hay_dump = ejecutar_remoto(
-            client, f"ls -1 {dump_dir}/*.core {dump_dir}/*.dmp 2>/dev/null | wc -l",
+            client,
+            f"ls -1 {dump_dir} 2>/dev/null | grep -vE '^(strace|stdout|stderr)\\.log$' | wc -l",
             mostrar=False,
         )
         if hay_dump.strip() == "0":

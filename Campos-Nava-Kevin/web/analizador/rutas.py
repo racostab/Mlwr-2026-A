@@ -4,6 +4,7 @@ from . import servicios
 
 urlpatterns = [
     path('',         servicios.index,   name='index'),
+    path('dynamic/', servicios.dynamic, name='dynamic'),
     path('history/', servicios.history, name='history'),
     path('rules/',   servicios.rules,   name='rules'),
     path('stats/',   servicios.stats,   name='stats'),

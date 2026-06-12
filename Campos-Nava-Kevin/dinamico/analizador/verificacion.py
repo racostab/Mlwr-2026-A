@@ -15,6 +15,9 @@ Comprobaciones (TODAS son críticas: si una falla, se aborta sin detonar):
      el DROP (firewall ausente o sudo no disponible), se aborta.
   4. Internet INALCANZABLE — LA PRUEBA DE FUEGO: desde dentro de la VM se intenta
      abrir TCP a IPs públicas y resolver DNS; TODO debe fallar.
+  5. Sin carpetas compartidas — la VM no tiene ningún mapeo de carpeta (máquina ni
+     global): no hay puente de disco guest→host por el que el malware escriba en el
+     host sin tocar la red.
 
 Uso directo (diagnóstico, enciende la VM aislada si hace falta):
     python3 dinamico/analizador/verificacion.py [nombre_vm]
@@ -103,6 +106,20 @@ def verificar(nombre: str, client=None, ip: str | None = None) -> bool:
     chequeos.append(("Red host-only vboxnet0 presente", ok_ho, red.IFACE_HOSTONLY))
     if not ok_ho:
         criticos.append("no existe la interfaz host-only 'vboxnet0' (canal host↔VM)")
+
+    # Una carpeta compartida es un puente de disco guest→host que el malware puede
+    # usar para escribir en el host SIN red, saltándose todo el aislamiento de red.
+    # Debe haber CERO (red.preparar_aislada ya las quita; aquí se re-confirma).
+    compartidas = red.carpetas_compartidas(nombre)
+    ok_sf = not compartidas
+    chequeos.append(("Sin carpetas compartidas (puente de disco al host)", ok_sf,
+                     "ninguna" if ok_sf else "EXPUESTAS: " + ", ".join(compartidas)))
+    if not ok_sf:
+        criticos.append(
+            "hay carpeta(s) compartida(s) montables en la VM (" + ", ".join(compartidas)
+            + "): el malware podría escribir en el disco del host sin red. Quítalas "
+            "('VBoxManage sharedfolder remove " + nombre + " --name <n> [--global]') "
+            "y re-toma el snapshot limpio")
 
     fw = firewall.esta_aplicado()
     detalle_fw = {

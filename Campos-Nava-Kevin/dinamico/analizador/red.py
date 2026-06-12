@@ -77,6 +77,39 @@ def aislar(nombre: str) -> None:
     vboxmanage("modifyvm", nombre, "--nic1", "null")  # NAT desconectado → sin internet
 
 
+def carpetas_compartidas(nombre: str) -> list[str]:
+    """Nombres de las carpetas compartidas de la VM (máquina/global/transitorias)."""
+    info = vboxmanage("showvminfo", nombre, "--machinereadable")
+    nombres = []
+    for linea in info.splitlines():
+        # SharedFolderNameMachineMapping1="x" / ...GlobalMapping... / ...TransientMapping...
+        if linea.startswith("SharedFolderName") and "=" in linea:
+            nombres.append(linea.split("=", 1)[1].strip().strip('"'))
+    return nombres
+
+
+def quitar_carpetas_compartidas(nombre: str) -> list[str]:
+    """Elimina TODA carpeta compartida de la VM. Devuelve las que quitó.
+
+    Una carpeta compartida es un puente de archivos guest→host: un malware podría
+    escribir en el disco del host (ransomware, drop de payloads) SIN tocar la red,
+    saltándose todo el aislamiento de red. Se eliminan antes de cada detonación; el
+    gate (`verificacion`) lo re-confirma y aborta si reaparece alguna. Solo se puede
+    con la VM apagada.
+    """
+    quitadas = []
+    for n in carpetas_compartidas(nombre):
+        # Un mapeo puede ser de máquina o global; probamos ambos alcances.
+        for extra in (("--global",), ()):
+            try:
+                vboxmanage("sharedfolder", "remove", nombre, "--name", n, *extra)
+                quitadas.append(n)
+                break
+            except RuntimeError:
+                continue
+    return quitadas
+
+
 def iniciar_vm(nombre: str) -> None:
     if not vm_corriendo(nombre):
         vboxmanage("startvm", nombre, "--type", "headless")
@@ -101,6 +134,7 @@ def preparar_aislada(nombre: str) -> str:
         )
     asegurar_interfaz_hostonly()
     if not vm_corriendo(nombre):
+        quitar_carpetas_compartidas(nombre)  # ningún puente de disco guest→host
         aislar(nombre)
         iniciar_vm(nombre)
     return GUEST_IP

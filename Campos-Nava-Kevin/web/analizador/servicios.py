@@ -4,6 +4,9 @@ import requests
 from django.shortcuts import render
 
 ENGINE_URL = os.environ.get("ENGINE_URL", "http://localhost:8001")
+# El análisis dinámico vive en el HOST (VBoxManage + iptables), fuera de Docker.
+# La web lo alcanza por el gateway del host (ver docker-compose: extra_hosts).
+DYNAMIC_URL = os.environ.get("DYNAMIC_URL", "http://localhost:8002")
 
 
 def _tools_por_defecto(catalogo: list[dict]) -> list[str]:
@@ -160,6 +163,47 @@ def index(request):
                        "tools": catalogo})
 
     return render(request, "analizador/index.html", {"tools": catalogo})
+
+
+def dynamic(request):
+    """Análisis dinámico: detona una muestra en la VM Kali aislada (lado host).
+
+    La web no toca VirtualBox ni el firewall; solo habla por HTTP con el servicio
+    del host (`DYNAMIC_URL`). En POST sube la muestra y la encola; en GET muestra
+    el estado del lab dinámico y los jobs recientes.
+    """
+    error = None
+
+    if request.method == "POST" and request.FILES.get("file"):
+        f = request.FILES["file"]
+        segundos = request.POST.get("segundos", "20")
+        try:
+            requests.post(
+                f"{DYNAMIC_URL}/analisis",
+                files={"file": (f.name, f.read(), f.content_type)},
+                data={"segundos": segundos},
+                timeout=30,
+            ).raise_for_status()
+        except Exception as e:  # noqa: BLE001
+            error = (f"No se pudo encolar la detonación: {e}. "
+                     "¿Está corriendo el servicio dinámico en el host "
+                     "(bash dinamico/scripts/servicio_dinamico.sh)?")
+
+    estado, jobs = None, []
+    try:
+        estado = requests.get(f"{DYNAMIC_URL}/estado", timeout=5).json()
+        jobs = requests.get(f"{DYNAMIC_URL}/analisis", timeout=5).json()
+    except Exception as e:  # noqa: BLE001
+        if error is None:
+            error = (f"Servicio dinámico no disponible: {e}. "
+                     "Arráncalo en el host con "
+                     "bash dinamico/scripts/servicio_dinamico.sh")
+
+    activos = any(j.get("estado") in ("en_cola", "ejecutando", "analizando_volcado")
+                  for j in jobs)
+    return render(request, "analizador/dynamic.html",
+                  {"estado": estado, "jobs": jobs, "error": error,
+                   "hay_activos": activos})
 
 
 def history(request):

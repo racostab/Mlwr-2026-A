@@ -1,0 +1,128 @@
+{% extends 'analizador/base.html' %}
+
+{% block title %}Análisis dinámico · Malware Lab{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="page-head__eyebrow">Laboratorio</p>
+    <h1 class="page-head__title">Análisis dinámico</h1>
+  </div>
+  {% if estado.en_cola %}
+  <span class="count-pill">{{ estado.en_cola }} en cola</span>
+  {% endif %}
+</header>
+
+<p class="muted" style="margin-top:-.5rem;max-width:60ch">
+  La muestra se detona dentro de la VM Kali <strong>aislada</strong> (red host-only,
+  sin NAT, firewall del host). Antes de ejecutar nada se restaura un estado limpio
+  y se verifica que la jaula está cerrada; si hay fuga, se aborta sin detonar.
+</p>
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+  <div class="alert__body">
+    <strong>El servicio dinámico no respondió.</strong>
+    <span>{{ error }}</span>
+  </div>
+</div>
+{% endif %}
+
+{# ---------- Readiness de la jaula ---------- #}
+{% if estado %}
+<div class="panel">
+  <ul class="kv">
+    <li class="kv__row">
+      <span class="kv__key">VirtualBox (host)</span>
+      <span class="kv__val">{% if estado.vbox_disponible %}✓ disponible{% else %}✗ no instalado{% endif %}</span>
+    </li>
+    <li class="kv__row">
+      <span class="kv__key">VM «{{ estado.vm }}»</span>
+      <span class="kv__val">{% if estado.vm_existe %}✓ existe{% else %}✗ no creada (vagrant up){% endif %}</span>
+    </li>
+    <li class="kv__row">
+      <span class="kv__key">Snapshot limpio</span>
+      <span class="kv__val">
+        {% if estado.snapshot_limpio %}✓ presente
+        {% else %}✗ falta — créalo: <span class="mono">control_maquina_virtual.sh snapshot kali</span>{% endif %}
+      </span>
+    </li>
+    <li class="kv__row">
+      <span class="kv__key">Estado de la VM</span>
+      <span class="kv__val">{% if estado.vm_corriendo %}encendida{% else %}apagada{% endif %}</span>
+    </li>
+  </ul>
+</div>
+{% endif %}
+
+{# ---------- Detonar una muestra ---------- #}
+<div class="panel">
+  <form method="post" enctype="multipart/form-data" data-loading-form>
+    {% csrf_token %}
+    <p class="field">
+      <label class="field__label" for="file">Muestra (binario ELF)</label>
+      <input class="input" type="file" name="file" id="file" required>
+    </p>
+    <p class="field">
+      <label class="field__label" for="segundos">Tiempo de ejecución (segundos)</label>
+      <input class="input" type="number" name="segundos" id="segundos"
+             value="20" min="1" max="120">
+    </p>
+    <button class="btn btn--primary btn--block" type="submit"
+            {% if not estado.vm_existe %}disabled title="La VM no existe todavía"{% endif %}>
+      Detonar en la VM aislada
+    </button>
+  </form>
+</div>
+
+{# ---------- Jobs recientes ---------- #}
+{% if jobs %}
+<div class="panel">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Muestra</th>
+          <th scope="col">Estado</th>
+          <th scope="col">Segundos</th>
+          <th scope="col">Resultados</th>
+          <th scope="col">Creado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jobs %}
+        <tr>
+          <td>{{ j.filename }}</td>
+          <td>
+            {% if j.estado == 'listo' %}<span class="count-pill">✓ listo</span>
+            {% elif j.estado == 'error' %}<span class="mono small" title="{{ j.error }}">✗ {{ j.mensaje }}</span>
+            {% elif j.estado == 'ejecutando' %}<span class="count-pill">● detonando…</span>
+            {% elif j.estado == 'analizando_volcado' %}<span class="count-pill">● escaneando volcado…</span>
+            {% else %}<span class="muted small">… en cola</span>{% endif %}
+          </td>
+          <td>{{ j.segundos }}</td>
+          <td>
+            {% if j.destino %}<span class="mono small">{{ j.destino }}</span>
+              {% if j.archivos %}<br><span class="muted small">{{ j.archivos|join:", " }}</span>{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td><span class="muted small">{{ j.creado }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small">
+    Los resultados quedan en el host, en <span class="mono">dynamic_output/&lt;timestamp&gt;/</span>:
+    <span class="mono">strace.log</span> (syscalls), <span class="mono">stdout/stderr</span> y el
+    volcado de memoria para análisis estático posterior.
+  </p>
+</div>
+{% endif %}
+
+{# Mientras haya jobs en curso, refresca para ver el avance (la web reconsulta
+   al servicio del host; el navegador no habla directo con él). #}
+{% if hay_activos %}
+<script>setTimeout(function(){ location.reload(); }, 4000);</script>
+{% endif %}
+{% endblock %}

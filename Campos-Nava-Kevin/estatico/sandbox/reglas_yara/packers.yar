@@ -48,3 +48,64 @@ rule Packer_Generico_Strings
     condition:
         2 of them
 }
+
+rule UPX_Magia_Binaria
+{
+    meta:
+        descripcion = "Firma binaria UPX! en el stub (no solo la cadena ASCII)"
+    strings:
+        $magic = { 55 50 58 21 }           // 'UPX!'
+        $l0    = { 55 50 58 30 }           // 'UPX0'
+        $l1    = { 55 50 58 31 }           // 'UPX1'
+    condition:
+        $magic and ($l0 or $l1)
+}
+
+rule Packer_MPRESS
+{
+    meta:
+        descripcion = "Empaquetador MPRESS"
+    strings:
+        $a = "MPRESS" nocase
+        $b = ".MPRESS1"
+        $c = ".MPRESS2"
+    condition:
+        any of them
+}
+
+rule Packer_gzexe
+{
+    meta:
+        descripcion = "Auto-extraible gzexe (script + binario gzip embebido)"
+    strings:
+        $sh   = "#!/bin/sh"
+        $gz   = "gzip"
+        $skip = "tail -n +"
+        $lead = "leading garbage"
+    condition:
+        $sh at 0 and 2 of ($gz, $skip, $lead)
+}
+
+rule Packer_Ezuri_Loader
+{
+    meta:
+        descripcion = "Crypter/loader Ezuri (ELF en memoria via memfd, comun en Go/C)"
+    strings:
+        $a = "memfd_create"
+        $b = "/proc/self/fd/"
+        $c = "ld-linux"
+    condition:
+        $a and ($b or $c)
+}
+
+rule Packer_Go_Garble
+{
+    meta:
+        descripcion = "Indicios de ofuscacion de binarios Go (garble): runtime Go sin symtab clara"
+    strings:
+        $go   = "go.buildid"
+        $rt   = "runtime.main"
+        $garb = "_garble"
+    condition:
+        $go and ($garb or not $rt)
+}

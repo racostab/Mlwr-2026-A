@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  * {
+    border-color: theme("colors.line");
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-ink-950 text-slate-200 font-sans antialiased;
+    background-image:
+      radial-gradient(900px 480px at 82% -10%, rgba(109, 18, 56, 0.28), transparent 60%),
+      radial-gradient(700px 420px at 0% 0%, rgba(176, 51, 99, 0.12), transparent 55%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    @apply bg-guinda-600/40 text-white;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-700 rounded-full border-2 border-transparent bg-clip-content;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-ink-900/70 backdrop-blur-sm shadow-card;
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:border-line-strong hover:shadow-glow;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line-strong bg-ink-950/60 px-3.5 py-2.5 text-sm
+      text-slate-100 placeholder:text-slate-500 outline-none transition
+      focus:border-guinda-400 focus:ring-2 focus:ring-guinda-500/30;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+      transition-all duration-150 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-br from-guinda-500 to-guinda-700 text-white
+      shadow-[0_10px_30px_-12px_rgba(176,51,99,0.9)] hover:from-guinda-400 hover:to-guinda-600;
+  }
+  .btn-ghost {
+    @apply btn border border-line-strong bg-ink-800/60 text-slate-200 hover:bg-ink-700 hover:text-white;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-ink-800/70
+      px-3 py-1 text-xs font-medium text-slate-300;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.18em] text-guinda-300;
+  }
+  .label {
+    @apply text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500;
+  }
+}
+
+@layer utilities {
+  .mono {
+    @apply font-mono;
+  }
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(176, 51, 99, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(176, 51, 99, 0.06) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  .text-gradient {
+    @apply bg-gradient-to-r from-white via-guinda-100 to-oro-300 bg-clip-text text-transparent;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, #1a1424 25%, #241a31 37%, #1a1424 63%);
+    background-size: 700px 100%;
+    @apply animate-shimmer;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

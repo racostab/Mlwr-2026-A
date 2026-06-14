@@ -28,6 +28,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 import analizador_dinamico
 import mitre
@@ -111,6 +112,19 @@ def _worker() -> None:
                 os.remove(ruta)
             except OSError:
                 pass
+            # Dejar la VM LIMPIA tras la detonación: restaurar el snapshot base
+            # DESCARTA el estado contaminado (la muestra y cualquier residuo:
+            # procesos, persistencia, archivos) y apaga la VM. Así no queda malware
+            # "vivo" entre análisis lanzados desde el front; el siguiente job vuelve
+            # a restaurar al arrancar (idempotente). Best-effort: si falla, no rompe
+            # el job ya terminado.
+            try:
+                vm = cfg()["vm_name"]
+                if snapshot.existe(vm):
+                    snapshot.restaurar(vm)  # apaga la VM y revierte al estado limpio
+                    job["mensaje"] += " · VM restaurada al estado limpio."
+            except Exception as e:  # noqa: BLE001 — limpieza best-effort
+                job["mensaje"] += f" · (no se pudo restaurar la VM: {e})"
             _cola.task_done()
 
 
@@ -162,6 +176,23 @@ def ver(jid: str) -> dict:
     if job is None:
         raise HTTPException(404, "job no encontrado")
     return _publico(job)
+
+
+@app.get("/analisis/{jid}/archivo/{nombre}")
+def descargar(jid: str, nombre: str) -> FileResponse:
+    """Descarga un archivo de resultados del job (strace.log, post_analisis.json,
+    stdout/stderr.log, volcado…). Solo sirve archivos dentro de la carpeta del job."""
+    job = _jobs.get(jid)
+    if job is None:
+        raise HTTPException(404, "job no encontrado")
+    destino = job.get("destino")
+    if not destino:
+        raise HTTPException(409, "el job aún no tiene resultados")
+    # `basename` evita path traversal (../): solo el nombre, sin rutas.
+    ruta = (Path(destino) / os.path.basename(nombre)).resolve()
+    if Path(destino).resolve() not in ruta.parents or not ruta.is_file():
+        raise HTTPException(404, "archivo no encontrado")
+    return FileResponse(ruta, filename=ruta.name, media_type="application/octet-stream")
 
 
 if __name__ == "__main__":

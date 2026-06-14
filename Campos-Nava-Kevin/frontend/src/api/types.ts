@@ -102,6 +102,17 @@ export interface MitreMap {
   };
 }
 
+// Resultado del post-análisis del volcado: por cada volcado, lo que devolvieron
+// las herramientas estáticas (yara → {matches}, strings → string[]).
+export interface VolcadoAnalisis {
+  sha256?: string;
+  yara?: { matches: string[]; error?: string };
+  strings?: string; // texto completo (strings -n N), una cadena por línea
+  error?: string;
+}
+// `post_analisis` = { <archivo>: VolcadoAnalisis } (+ posible "_aviso": string).
+export type PostAnalisis = Record<string, VolcadoAnalisis | string>;
+
 export type DynamicJobState =
   | "en_cola"
   | "ejecutando"
@@ -119,6 +130,6 @@ export interface DynamicJob {
   destino: string | null;
   archivos: string[];
   error: string | null;
-  post_analisis?: Record<string, unknown>;
+  post_analisis?: PostAnalisis;
   mitre?: MitreMap;
 }

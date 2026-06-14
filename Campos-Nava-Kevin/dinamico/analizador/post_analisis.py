@@ -49,7 +49,11 @@ def analizar_volcado(destino: str | Path, engine_url: str | None = None) -> dict
 
     volcados = [p for p in sorted(destino.glob("*")) if p.is_file() and _es_volcado(p)]
     if not volcados:
-        resultados["_aviso"] = "No se encontró ningún volcado de memoria que escanear."
+        resultados["_aviso"] = (
+            "No se encontró ningún volcado de memoria que escanear. Suele pasar "
+            "cuando la muestra es de vida corta y termina antes del volcado (p. ej. "
+            "el canario bash de aislamiento): usa una muestra de vida larga, como el "
+            "espécimen C 'especimen_benigno', que permanece viva hasta el volcado.")
         _guardar(destino, resultados)
         return resultados
 

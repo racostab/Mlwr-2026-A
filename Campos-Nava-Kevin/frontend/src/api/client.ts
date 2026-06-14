@@ -102,3 +102,9 @@ export async function createDynamicJob(file: File, segundos: number): Promise<Dy
   const { data } = await dynamic.post<DynamicJob>("/analisis", fd);
   return data;
 }
+
+// URL directa para descargar un archivo de resultados de un job dinámico
+// (strace.log, post_analisis.json, stdout/stderr.log, volcado…).
+export function dynamicFileUrl(jid: string, nombre: string): string {
+  return `${DYNAMIC}/analisis/${jid}/archivo/${encodeURIComponent(nombre)}`;
+}

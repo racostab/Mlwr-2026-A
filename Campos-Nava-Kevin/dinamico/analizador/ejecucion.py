@@ -87,18 +87,35 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     else:
         print(f"[+] Muestra lanzada con PID {target} (strace PID {tracer})")
 
-    time.sleep(segundos)  # dejar que se cargue/desempaquete en memoria
-
-    # Si el PID original murió (la muestra pudo daemonizarse), buscar un proceso
-    # superviviente con el nombre del binario.
-    vivo = ejecutar_remoto(client, f"kill -0 {target} 2>/dev/null && echo si || echo no",
-                           mostrar=False) if target else "no"
-    if vivo != "si":
+    # Dejar correr la muestra bajo strace para que se desempaquete y actúe, pero
+    # VIGILANDO que siga viva en pasos de 1 s, en vez de dormir el tiempo completo
+    # a ciegas (lo que hacía esperar en vano cuando la muestra sale antes). Así:
+    #   - VIDA CORTA: en cuanto muere salimos del bucle (no hay memoria que volcar
+    #     de un proceso ya terminado; strace.log igual capturó sus syscalls);
+    #   - DAEMONIZA: si el PID original muere pero deja un hijo, seguimos al
+    #     superviviente y será a él a quien volquemos.
+    vivo = "si" if target else "no"
+    fin = time.monotonic() + segundos
+    while time.monotonic() < fin:
+        time.sleep(min(1.0, max(0.0, fin - time.monotonic())))
+        if target and ejecutar_remoto(
+                client, f"kill -0 {target} 2>/dev/null && echo si || echo no",
+                mostrar=False) == "si":
+            vivo = "si"
+            continue
+        # El PID que seguíamos ya no está: ¿se daemonizó? Buscar superviviente.
         superv = ejecutar_remoto(client, f"pgrep -f {nombre} | head -n1", mostrar=False)
         if superv.isdigit():
-            print(f"[*] El PID original no sigue vivo; uso el superviviente {superv}")
-            target = superv
-            vivo = "si"
+            if superv != target:
+                print(f"[*] El PID original no sigue vivo; uso el superviviente {superv}")
+            target, vivo = superv, "si"
+            continue
+        # Nada vivo: muestra de vida corta. No tiene sentido seguir esperando.
+        if vivo == "si":
+            print("[!] La muestra terminó antes del tiempo pedido (vida corta); "
+                  "strace.log tiene sus syscalls, pero no queda proceso que volcar.")
+        vivo = "no"
+        break
 
     # strace tiene la muestra bajo ptrace, y gcore/procdump también usan ptrace
     # (solo un tracer a la vez). Matamos strace: el kernel DESENGANCHA a la muestra

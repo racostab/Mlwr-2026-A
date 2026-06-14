@@ -36,6 +36,36 @@ command -v vagrant    >/dev/null 2>&1 || { err "Vagrant no instalado (corre setu
 
 VM_NAME="$(python3 -c "import json;print(json.load(open('$CONFIG'))['kali']['vm_name'])" 2>/dev/null || echo kali-malware-lab)"
 
+# ── 1c. Sudo sin contraseña ACOTADO a iptables/ip6tables (firewall del host) ──
+# El servicio dinámico aplica el firewall del host con `sudo iptables`; para que
+# el front detone SIN intervención (sudo no interactivo), se instala una regla
+# sudoers NOPASSWD acotada SOLO a esos dos binarios. Pide la contraseña UNA vez
+# aquí (durante el setup); después el flujo es automático. Idempotente: si ya
+# está vigente (sudo -n iptables funciona), no hace nada.
+asegurar_sudo_firewall() {
+    local usuario ipt ip6t sudoers contenido
+    if sudo -n iptables -S INPUT >/dev/null 2>&1; then
+        ok "Sudo sin contraseña para el firewall ya configurado."
+        return 0
+    fi
+    usuario="${SUDO_USER:-$(id -un)}"
+    ipt="$(command -v iptables  || echo /usr/sbin/iptables)"
+    ip6t="$(command -v ip6tables || echo /usr/sbin/ip6tables)"
+    sudoers="/etc/sudoers.d/mlwr-lab-firewall"
+    contenido="$usuario ALL=(root) NOPASSWD: $ipt, $ip6t"
+    info "Configurando sudo sin contraseña acotado a iptables (pedirá tu contraseña 1 vez)..."
+    if printf '%s\n' "$contenido" | sudo tee "$sudoers" >/dev/null \
+       && sudo chmod 440 "$sudoers" \
+       && sudo visudo -c >/dev/null 2>&1 \
+       && sudo -n iptables -S INPUT >/dev/null 2>&1; then
+        ok "Regla sudoers '$sudoers' instalada: el firewall del host se aplica solo."
+    else
+        sudo rm -f "$sudoers" 2>/dev/null || true
+        err "No se pudo configurar el sudo del firewall; el front lo pedirá a mano."
+    fi
+}
+asegurar_sudo_firewall
+
 # ── 1b. Limpiar la regla NAT 'ssh' residual (evita "NAT rule already exists") ─
 # El paso de aislamiento pone nic1=null; el siguiente `vagrant up` lo regresa a
 # nat y RE-CREA el reenvío SSH (2222→22), pero la regla anterior queda huérfana y

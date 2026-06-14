@@ -20,7 +20,8 @@ Las otras capas viven en sus módulos: la red en `red.py`, el firewall en
 """
 import sys
 
-from red import apagar_vm, vboxmanage, vm_existe
+from red import (aislar, apagar_vm, quitar_carpetas_compartidas, vboxmanage,
+                 vm_existe)
 
 SNAPSHOT_LIMPIO = "limpio"   # nombre canónico del estado base recién provisionado
 
@@ -52,8 +53,15 @@ def crear(nombre: str, snap: str = SNAPSHOT_LIMPIO, recrear: bool = False) -> No
             return
         vboxmanage("snapshot", nombre, "delete", snap)
     apagar_vm(nombre)  # estado en disco consistente
+    # ENJAULAR LA LÍNEA BASE: el snapshot se toma ya AISLADO, no solo el runtime.
+    # Así la VM, tal como se restaura/levanta, queda sin NAT (nic1=null ⇒ sin
+    # internet) y sin carpetas compartidas (sin puente de disco guest→host). El
+    # aislamiento deja de depender de que `preparar_aislada` lo aplique en cada
+    # run: el estado base YA es la jaula (defensa en profundidad).
+    aislar(nombre)                      # adaptador 1 → null: sin tarjeta a internet
+    quitar_carpetas_compartidas(nombre)  # cero puentes de archivos al host
     vboxmanage("snapshot", nombre, "take", snap,
-               "--description", "Estado base recien provisionado (sin malware)")
+               "--description", "Estado base aislado: sin NAT (nic1=null) ni carpetas compartidas")
 
 
 def restaurar(nombre: str, snap: str = SNAPSHOT_LIMPIO) -> None:
@@ -81,8 +89,16 @@ def asegurar_limpio_y_restaurar(nombre: str, snap: str = SNAPSHOT_LIMPIO) -> boo
       uso) y devuelve False, avisando que esta corrida define la línea base.
     """
     if existe(nombre, snap):
-        restaurar(nombre, snap)
-        return True
+        try:
+            restaurar(nombre, snap)
+            return True
+        except RuntimeError:
+            # Carrera: el snapshot desapareció entre el chequeo y la restauración
+            # (p. ej. un `crear --recrear` concurrente que lo borró un instante).
+            # En vez de ABORTAR la detonación con el error estricto, caemos abajo
+            # y lo re-creamos: el flujo del front se auto-recupera siempre.
+            print(f"[!] El snapshot '{snap}' desapareció al restaurarlo (carrera); "
+                  "lo vuelvo a tomar.")
     print(f"[!] La VM '{nombre}' no tenía snapshot '{snap}'. Tomo uno AHORA desde el "
           "estado actual y lo uso como línea base limpia.\n"
           "    Si la VM ya estaba sucia, recréalo: snapshot.py crear --recrear.")

@@ -25,7 +25,20 @@ def estado():
     c = _container()
     salida = run(["docker", "inspect", "-f", "{{.State.Status}}", c])
     print(f"[*] Estado: {salida}")
-    return salida
+    return salidadef hash_archivo(client, ruta: str) -> dict:
+    comandos = {
+        "MD5":    f"md5sum {ruta}    | cut -d' ' -f1",
+        "SHA1":   f"sha1sum {ruta}   | cut -d' ' -f1",
+        "SHA256": f"sha256sum {ruta} | cut -d' ' -f1",
+    }
+    resultados = {}
+    for nombre, cmd in comandos.items():
+        _, stdout, stderr = client.exec_command(cmd)
+        stdout.channel.recv_exit_status()
+        valor = stdout.read().decode().strip()
+        error = stderr.read().decode().strip()
+        resultados[nombre] = f"ERROR: {error}" if error else valor
+    return resultados
 
 
 def iniciar():

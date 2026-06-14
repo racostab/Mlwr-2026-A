@@ -13,8 +13,10 @@ Comprobaciones (TODAS son críticas: si una falla, se aborta sin detonar):
   3. Firewall del host  — iptables descarta lo que la VM INICIE hacia el host.
      Se lee con `sudo -n` (vía `firewall.esta_aplicado`); si no se puede CONFIRMAR
      el DROP (firewall ausente o sudo no disponible), se aborta.
-  4. Internet INALCANZABLE — LA PRUEBA DE FUEGO: desde dentro de la VM se intenta
-     abrir TCP a IPs públicas y resolver DNS; TODO debe fallar.
+  4. Internet INALCANZABLE — LA PRUEBA DE FUEGO: desde dentro de la VM se tantea
+     salida por TCP (/dev/tcp), UDP (/dev/udp), ICMP (ping) y DNS a varias IPs y
+     puertos; TODO debe fallar. Como señal estructural extra, se revisa que NO
+     haya ruta por defecto (sin gateway ⇒ nada enruta afuera por ningún protocolo).
   5. Sin carpetas compartidas — la VM no tiene ningún mapeo de carpeta (máquina ni
      global): no hay puente de disco guest→host por el que el malware escriba en el
      host sin tocar la red.
@@ -29,10 +31,12 @@ import firewall
 from compartido.configuracion import kali as cfg
 from compartido.sftp.conexion import conectar_con_reintentos
 
-# IPs públicas para la prueba de fuga (puerto 53: casi siempre alcanzable si hay
-# salida). Se prueban por TCP con el builtin /dev/tcp de bash: no depende de que
-# `ping` o `curl` estén instalados en la VM.
+# IPs públicas para la prueba de fuga. Se prueban con los builtins /dev/tcp y
+# /dev/udp de bash (no dependen de que `curl`/`nc` estén en la VM), más ICMP y DNS.
 IPS_PUBLICAS = ("1.1.1.1", "8.8.8.8")
+# Puertos representativos a tantear por cada protocolo (servicios comunes de C2).
+PUERTOS_TCP = (53, 80, 443)        # DNS, HTTP, HTTPS
+PUERTOS_UDP = (53, 123, 1194)      # DNS, NTP, OpenVPN (UDP también se usa para C2)
 
 
 class NoAislada(RuntimeError):
@@ -61,26 +65,51 @@ def hostonly_presente() -> bool:
     return red.IFACE_HOSTONLY in red.vboxmanage("list", "hostonlyifs")
 
 
-def internet_alcanzable(client) -> tuple[bool, str]:
-    """Prueba REAL desde dentro de la VM si hay salida a internet.
+def _sale(client, cmd: str) -> bool:
+    """True si `cmd` tuvo éxito en la VM (salió un paquete / hubo respuesta)."""
+    return _run(client, f"{cmd} && echo SALE || echo NO").endswith("SALE")
 
-    Devuelve (alcanzable, detalle). Usa TCP a IPs públicas (no depende de DNS ni
-    de binarios) y, como señal extra, una resolución DNS.
+
+def internet_alcanzable(client) -> tuple[bool, str]:
+    """Prueba REAL y EXTENSA desde la VM si hay salida (TCP+UDP+ICMP+DNS).
+
+    Devuelve (alcanzable, detalle). CUALQUIER éxito por cualquier protocolo cuenta
+    como fuga y corta al primer indicio. En la jaula (sin ruta por defecto) todo
+    falla al instante con ENETUNREACH, así que el barrido es barato pese a probar
+    varios puertos/protocolos.
+
+    Notas por protocolo:
+      - TCP (`/dev/tcp`): el connect() falla si no hay ruta → no salió nada.
+      - UDP (`/dev/udp`): el sendto() también falla con ENETUNREACH sin ruta; con
+        ruta tiene éxito aunque no haya respuesta (el datagrama YA salió = fuga).
+      - ICMP (`ping`): best-effort; sólo cuenta si LLEGA respuesta.
+      - DNS (`getent`): resolución contra el resolutor configurado.
     """
+    # 1. TCP a varios puertos comunes.
     for ip in IPS_PUBLICAS:
-        cmd = (
-            f"timeout 3 bash -c 'echo > /dev/tcp/{ip}/53' 2>/dev/null "
-            f"&& echo SALE || echo NO"
-        )
-        if _run(client, cmd) == "SALE":
-            return True, f"la VM ALCANZÓ {ip}:53 — hay salida a internet"
-    dns = _run(
-        client,
-        "timeout 3 getent hosts google.com >/dev/null 2>&1 && echo SALE || echo NO",
-    )
-    if dns == "SALE":
+        for puerto in PUERTOS_TCP:
+            if _sale(client, f"timeout 3 bash -c 'echo > /dev/tcp/{ip}/{puerto}' 2>/dev/null"):
+                return True, f"TCP salió a {ip}:{puerto} — hay salida a internet"
+    # 2. UDP: enviar un datagrama; si la pila lo acepta es que hay ruta de salida.
+    for ip in IPS_PUBLICAS:
+        for puerto in PUERTOS_UDP:
+            if _sale(client, f"timeout 3 bash -c 'echo x > /dev/udp/{ip}/{puerto}' 2>/dev/null"):
+                return True, f"UDP salió a {ip}:{puerto} — hay salida a internet (datagrama enviado)"
+    # 3. ICMP: sólo cuenta si hay RESPUESTA (ping puede faltar o requerir privilegios).
+    for ip in IPS_PUBLICAS:
+        if _sale(client, f"timeout 3 ping -c1 -W2 {ip} >/dev/null 2>&1"):
+            return True, f"ICMP: {ip} respondió al ping — hay salida a internet"
+    # 4. DNS: resolución contra el resolutor de la VM.
+    if _sale(client, "timeout 3 getent hosts google.com >/dev/null 2>&1"):
         return True, "la VM resolvió DNS público — hay salida a internet"
-    return False, "TCP a 1.1.1.1/8.8.8.8:53 y DNS bloqueados (sin salida)"
+    return False, ("sin salida por NINGÚN protocolo: TCP(53/80/443) + UDP(53/123/1194) "
+                   "+ ICMP + DNS a 1.1.1.1/8.8.8.8 todos bloqueados")
+
+
+def ruta_por_defecto(client) -> str:
+    """Ruta(s) por defecto en la VM. Vacío = no hay gateway de salida (no puede
+    enrutar a redes externas por ningún protocolo). Señal estructural extra."""
+    return _run(client, "ip route show default 2>/dev/null")
 
 
 def _icono(estado) -> str:
@@ -143,9 +172,15 @@ def verificar(nombre: str, client=None, ip: str | None = None) -> bool:
         propio = True
     try:
         alcanza, detalle = internet_alcanzable(client)
-        chequeos.append(("Internet INALCANZABLE desde la VM", not alcanza, detalle))
+        chequeos.append(("Internet INALCANZABLE (TCP+UDP+ICMP+DNS)", not alcanza, detalle))
         if alcanza:
             criticos.append(detalle)
+        # Señal estructural extra (informativa): sin gateway de salida, nada puede
+        # enrutar afuera por ningún protocolo. No es crítica por sí sola (la prueba
+        # de fuego de arriba ya es la que decide), pero documenta el porqué.
+        ruta = ruta_por_defecto(client)
+        chequeos.append(("Sin ruta por defecto (gateway de salida)", not ruta,
+                         "ninguna" if not ruta else f"EXISTE: {ruta}"))
     finally:
         if propio:
             client.close()

@@ -107,8 +107,11 @@ def asegurar_limpio_y_restaurar(nombre: str, snap: str = SNAPSHOT_LIMPIO) -> boo
 
 
 if __name__ == "__main__":
-    accion = sys.argv[1] if len(sys.argv) > 1 else "crear"
-    vm = sys.argv[2] if len(sys.argv) > 2 else "kali-malware-lab"
+    # Posicionales = lo que NO empieza por '--'; así los flags (p. ej. --recrear)
+    # pueden ir en cualquier orden sin colarse como nombre de VM.
+    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    accion = pos[0] if pos else "crear"
+    vm = pos[1] if len(pos) > 1 else "kali-malware-lab"
     if accion == "crear":
         crear(vm, recrear="--recrear" in sys.argv)
         print(f"[+] Snapshot '{SNAPSHOT_LIMPIO}' tomado de '{vm}'.")

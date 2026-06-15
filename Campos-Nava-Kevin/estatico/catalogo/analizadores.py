@@ -101,6 +101,31 @@ def radare_archivo(client, ruta: str, **_) -> str:
     return stdout.read().decode(errors="replace").strip()
 
 
+def radare_volcado(client, ruta: str, **_) -> str:
+    """radare2 sobre un VOLCADO de memoria (core ELF, ET_CORE).
+
+    A diferencia de `radare_archivo` (pensado para un ELF con entry0/main), un
+    core no tiene punto de entrada ni símbolos: se enfoca en lo útil del volcado:
+      - `i`     → info del core (arch, bits, tipo);
+      - `iS`    → segmentos/mapeos PT_LOAD (la memoria capturada);
+      - `dr`    → registros guardados al momento del volcado;
+      - `pd @ rip` → desensamblado en el puntero de instrucción = el código que la
+        muestra ejecutaba al volcarse, ya DESEMPACADO en memoria.
+    No usa `-A` (análisis completo): un core es enorme y aaa sería lento e inútil.
+    """
+    cmd = (
+        "r2 -e scr.color=0 -e bin.relocs.apply=true -q "
+        '-c "echo === INFO DEL CORE ===; i; '
+        'echo ; echo === SEGMENTOS / MAPEOS (PT_LOAD) ===; iS; '
+        'echo ; echo === REGISTROS AL VOLCAR ===; dr; '
+        'echo ; echo === DISASM EN RIP (codigo en ejecucion, desempacado) ===; pd 40 @ rip" '
+        f"{ruta} 2>&1"
+    )
+    _, stdout, _ = client.exec_command(cmd)
+    stdout.channel.recv_exit_status()
+    return stdout.read().decode(errors="replace").strip()
+
+
 def ssdeep_archivo(client, ruta: str, **_) -> str:
     """Fuzzy hash (ssdeep) para comparar similitud entre muestras."""
     _, stdout, stderr = client.exec_command(f"ssdeep {ruta}")

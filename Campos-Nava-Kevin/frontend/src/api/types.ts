@@ -108,6 +108,7 @@ export interface VolcadoAnalisis {
   sha256?: string;
   yara?: { matches: string[]; error?: string };
   strings?: string; // texto completo (strings -n N), una cadena por línea
+  radare_dump?: string; // radare2 sobre el core: info, segmentos, registros, disasm @ RIP
   error?: string;
 }
 // `post_analisis` = { <archivo>: VolcadoAnalisis } (+ posible "_aviso": string).

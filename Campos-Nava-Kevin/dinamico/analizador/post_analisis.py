@@ -24,7 +24,9 @@ SUFIJOS_VOLCADO = (".core", ".dmp", ".elf")
 # procdump → `dump_<n>.<pid>` (sin extensión .core/.dmp, por eso no basta el sufijo).
 PREFIJOS_VOLCADO = ("core", "dump")
 # Herramientas estáticas que aportan sobre un volcado de memoria.
-HERRAMIENTAS = ("yara", "strings")
+#   - yara/strings: cazan IOCs/firmas en la RAM desempacada.
+#   - radare_dump:  desensambla el código en ejecución (disasm @ RIP) del core.
+HERRAMIENTAS = ("yara", "strings", "radare_dump")
 
 
 def _es_volcado(p: Path) -> bool:

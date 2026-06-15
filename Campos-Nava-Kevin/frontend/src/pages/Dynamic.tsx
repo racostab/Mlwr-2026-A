@@ -378,6 +378,16 @@ function VolcadoHallazgos({ nombre, v }: { nombre: string; v: VolcadoAnalisis })
               </pre>
             </details>
           )}
+          {v.radare_dump && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[11px] text-slate-500">
+                radare2 — desensamblado del volcado (info · segmentos · registros · disasm @ RIP)
+              </summary>
+              <pre className="mt-2 max-h-60 overflow-auto rounded bg-ink-950 p-2 font-mono text-[11px] text-slate-400">
+                {v.radare_dump}
+              </pre>
+            </details>
+          )}
         </>
       )}
     </div>

@@ -28,8 +28,11 @@ REGLAS_SYSCALL = [
         ['connect(', 'sendto(', 'sendmsg(']),
     ("T1095",     "Protocolo no-aplicativo (sockets crudos)", "command-and-control",
         ['socket(AF_INET, SOCK_RAW', 'SOCK_RAW']),
+    # OJO: la aguja del puerto DNS es 'htons(53)' (como lo renderiza strace en
+    # connect/sendto), NO ':53' a secas: strace usa timestamps '-tt' (HH:MM:SS),
+    # así que ':53' casaba con cualquier línea del minuto/segundo 53 → falso DNS.
     ("T1071.004", "DNS", "command-and-control",
-        ['/etc/resolv.conf', 'getaddrinfo', 'res_query', ':53']),
+        ['/etc/resolv.conf', 'getaddrinfo', 'res_query', 'htons(53)']),
     ("T1620",     "Carga reflexiva de código (fileless)", "defense-evasion",
         ['memfd_create', 'execveat']),
     ("T1055",     "Inyección / código RWX en memoria", "defense-evasion",

@@ -14,6 +14,7 @@ from catalogo.analizadores import (
     file_archivo,
     hash_archivo,
     radare_archivo,
+    radare_volcado,
     readelf_archivo,
     ssdeep_archivo,
     strings_archivo,
@@ -42,6 +43,10 @@ CATALOGO: dict[str, Analizador] = {
         Analizador("readelf",  "Cabeceras ELF (readelf)",         readelf_archivo),
         Analizador("yara",     "Reglas YARA",                     yara_archivo),
         Analizador("radare",   "Desensamblado (radare2)",         radare_archivo),
+        # Variante para VOLCADOS de memoria (core ELF): la usa el post-análisis
+        # dinámico. Oculta en /tools (no aplica a un binario en disco normal).
+        Analizador("radare_dump", "Volcado: radare2 (disasm @ RIP)", radare_volcado,
+                   oculto=True),
         Analizador("strings",  "Cadenas legibles (strings)",      strings_archivo, cacheable=False),
         Analizador("xxd",      "Volcado hexadecimal (xxd)",       xxd_archivo,     cacheable=False),
         # Comando guiado: no se cachea (depende del cmd) ni se lista en /tools.

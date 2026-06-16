@@ -1,0 +1,24 @@
+tipo,indicador,contexto
+sha256,2baf73eae1c5135acf10290b063d0a65827611ba6874a326883d9be3b238a1b6,muestra
+sha256,bd997ed89ebf78d5eca7cca39b6d2484fe0caa4cf71aff51e490d21481f1abe5,volcado_memoria
+domain,soft8.gddos.com,c2 puerto 25
+domain,baidu.gddos.com,c2 puerto 25
+domain,pcdown.gddos.com,descarga config
+ipv4,103.233.83.245,c2 puerto 25
+ipv4,8.8.8.8,resolver dns hardcodeado
+ipv4,8.8.4.4,resolver dns hardcodeado
+url,http://pcdown.gddos.com:8080/cfg.rar,descarga config
+filepath,/tmp/witpunnhsu,copia ejecutada (random)
+filepath,/tmp/uxoldbzmwi,ruta auto-copia alternativa
+filepath,/bin/uxoldbzmwi,ruta auto-copia alternativa
+filepath,/usr/bin/uxoldbzmwi,ruta auto-copia alternativa
+filepath,/lib/libudev.so,firma xorddos
+filepath,/lib/libudev.so.6,firma xorddos
+filepath,/etc/cron.hourly/gcc.sh,persistencia
+filepath,/etc/init.d/witpunnhsu,persistencia init
+filepath,/var/run/gcc.pid,pid file
+filepath,/proc/rs_dev,dispositivo rootkit lkm
+cron,*/3 * * * * root /etc/cron.hourly/gcc.sh,persistencia cron
+useragent,Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.2; SV1; TencentTraveler ; .NET CLR 1.1.4322),c2 http
+xorkey,BB2FA36AAA9541F0,clave xor de config/strings
+yara,XorDDoS,familia

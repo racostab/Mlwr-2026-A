@@ -107,18 +107,21 @@ def radare_volcado(client, ruta: str, **_) -> str:
     A diferencia de `radare_archivo` (pensado para un ELF con entry0/main), un
     core no tiene punto de entrada ni símbolos: se enfoca en lo útil del volcado:
       - `i`     → info del core (arch, bits, tipo);
-      - `iS`    → segmentos/mapeos PT_LOAD (la memoria capturada);
+      - `om`    → mapeos del core (PT_LOAD: la memoria capturada). `iS` NO los lista
+        en un ET_CORE; `om` sí (incluye el binario relocalizado y el [stack]);
       - `dr`    → registros guardados al momento del volcado;
-      - `pd @ rip` → desensamblado en el puntero de instrucción = el código que la
-        muestra ejecutaba al volcarse, ya DESEMPACADO en memoria.
+      - `pd @ PC` → desensamblado en el puntero de instrucción = el código que la
+        muestra ejecutaba al volcarse, ya DESEMPACADO en memoria. Usamos el alias de
+        rol `PC` (no `rip`): resuelve a `eip` en cores de 32-bit y a `rip` en 64-bit,
+        así funciona con muestras de cualquier arquitectura.
     No usa `-A` (análisis completo): un core es enorme y aaa sería lento e inútil.
     """
     cmd = (
         "r2 -e scr.color=0 -e bin.relocs.apply=true -q "
         '-c "echo === INFO DEL CORE ===; i; '
-        'echo ; echo === SEGMENTOS / MAPEOS (PT_LOAD) ===; iS; '
+        'echo ; echo === MAPEOS DEL CORE (PT_LOAD) ===; om; '
         'echo ; echo === REGISTROS AL VOLCAR ===; dr; '
-        'echo ; echo === DISASM EN RIP (codigo en ejecucion, desempacado) ===; pd 40 @ rip" '
+        'echo ; echo === DISASM EN PC (codigo en ejecucion, desempacado) ===; pd 40 @ PC" '
         f"{ruta} 2>&1"
     )
     _, stdout, _ = client.exec_command(cmd)

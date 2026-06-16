@@ -45,7 +45,7 @@ CATALOGO: dict[str, Analizador] = {
         Analizador("radare",   "Desensamblado (radare2)",         radare_archivo),
         # Variante para VOLCADOS de memoria (core ELF): la usa el post-análisis
         # dinámico. Oculta en /tools (no aplica a un binario en disco normal).
-        Analizador("radare_dump", "Volcado: radare2 (disasm @ RIP)", radare_volcado,
+        Analizador("radare_dump", "Volcado: radare2 (disasm @ PC)", radare_volcado,
                    oculto=True),
         Analizador("strings",  "Cadenas legibles (strings)",      strings_archivo, cacheable=False),
         Analizador("xxd",      "Volcado hexadecimal (xxd)",       xxd_archivo,     cacheable=False),

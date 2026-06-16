@@ -57,6 +57,15 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     ejecutar_remoto(client, f"chmod +x {remoto} && rm -rf {dump_dir} && mkdir -p {dump_dir}",
                     mostrar=False)
 
+    # Línea base de PIDs ANTES de detonar. Cualquier proceso que aparezca después y
+    # siga vivo es de la muestra —AUNQUE se renombre o se copie a /tmp con nombre
+    # aleatorio (XorDDoS/Mirai/Gafgyt se relocalizan y matan el PID original)—. Por
+    # eso rastreamos al superviviente por DIFERENCIA contra esta base, no por nombre:
+    # `pgrep -f <nombre>` se le escapa en cuanto el binario se renombra. El dotfile
+    # `.baseline` no lo recoge el `ls -1` final (no lista ocultos), así que no se baja.
+    ejecutar_remoto(client, f"ps -e -o pid= | tr -d ' ' | sort -u > {dump_dir}/.baseline",
+                    mostrar=False)
+
     # Ejecutar la muestra BAJO strace para registrar sus syscalls (connect/open/
     # execve/...). strace queda como proceso padre y la muestra como su hijo, así
     # que $! es el PID de strace; el PID real del binario es su hijo.
@@ -87,6 +96,22 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     else:
         print(f"[+] Muestra lanzada con PID {target} (strace PID {tracer})")
 
+    # Procesos VIVOS surgidos tras la detonación (no en la línea base), excluyendo a
+    # strace y a los procesos de NUESTRO propio sondeo (mismo grupo de proceso que
+    # este shell). Se queda solo con PIDs reales (con /proc/<pid>/exe; no hilos de
+    # kernel). Así hallamos al superviviente aunque corra con otro nombre desde /tmp.
+    superv_cmd = (
+        "mypgid=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' '); "
+        "ps -eo pid=,pgid= | "
+        "awk -v tr=__TRACER__ -v pg=\"$mypgid\" "
+        "'BEGIN{while((getline l < \"__BASE__\")>0) b[l]=1} "
+        "($1 in b){next} ($1==tr){next} ($2==pg){next} {print $1}' | "
+        "while read p; do kill -0 \"$p\" 2>/dev/null && [ -e /proc/$p/exe ] && echo \"$p\"; done"
+    ).replace("__TRACER__", tracer or "0").replace("__BASE__", f"{dump_dir}/.baseline")
+
+    def supervivientes() -> list[str]:
+        return ejecutar_remoto(client, superv_cmd, mostrar=False).split()
+
     # Dejar correr la muestra bajo strace para que se desempaquete y actúe, pero
     # VIGILANDO que siga viva en pasos de 1 s, en vez de dormir el tiempo completo
     # a ciegas (lo que hacía esperar en vano cuando la muestra sale antes). Así:
@@ -98,19 +123,13 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
     fin = time.monotonic() + segundos
     while time.monotonic() < fin:
         time.sleep(min(1.0, max(0.0, fin - time.monotonic())))
-        if target and ejecutar_remoto(
-                client, f"kill -0 {target} 2>/dev/null && echo si || echo no",
-                mostrar=False) == "si":
+        # ¿Sigue vivo algo de la muestra? Cubre los dos casos de un tiro: el PID
+        # original sigue corriendo, O se daemonizó/relocalizó con otro nombre (ambos
+        # aparecen como "nuevos vs. línea base"). No dependemos del nombre del binario.
+        if supervivientes():
             vivo = "si"
             continue
-        # El PID que seguíamos ya no está: ¿se daemonizó? Buscar superviviente.
-        superv = ejecutar_remoto(client, f"pgrep -f {nombre} | head -n1", mostrar=False)
-        if superv.isdigit():
-            if superv != target:
-                print(f"[*] El PID original no sigue vivo; uso el superviviente {superv}")
-            target, vivo = superv, "si"
-            continue
-        # Nada vivo: muestra de vida corta. No tiene sentido seguir esperando.
+        # Ningún proceso nuevo sigue vivo: la muestra sí era de vida corta.
         if vivo == "si":
             print("[!] La muestra terminó antes del tiempo pedido (vida corta); "
                   "strace.log tiene sus syscalls, pero no queda proceso que volcar.")
@@ -137,14 +156,21 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
         )
         time.sleep(1)  # esperar a que el kernel complete el detach
 
-    if vivo != "si":
+    # Recalcular supervivientes TRAS soltar el ptrace: pueden ser varios (el daemon
+    # principal + su watchdog/hijos), y con nombres distintos al binario subido.
+    vivos = supervivientes() if vivo == "si" else []
+    if not vivos:
         print("[!] No hay proceso vivo de la muestra; no se pudo volcar su memoria.")
     else:
-        print(f"[*] Volcando memoria del PID {target} con procdump...")
-        # procdump (Sysinternals para Linux) exige el PID con -p y el prefijo de
-        # salida con -o; -n 1 escribe un solo volcado y -s 1 lo dispara tras 1s de
-        # vida (no 10 por defecto). El volcado queda en {dump_dir}/dump_*.
-        ejecutar_remoto(client, f"sudo -n procdump -s 1 -n 1 -p {target} -o {dump_dir}/dump 2>&1")
+        print(f"[*] Superviviente(s) a volcar: {' '.join(vivos)}")
+        for pid in vivos:
+            exe = ejecutar_remoto(client, f"readlink -f /proc/{pid}/exe 2>/dev/null",
+                                  mostrar=False) or "??"
+            print(f"[*] Volcando PID {pid} ({exe}) con procdump...")
+            # procdump (Sysinternals para Linux) exige el PID con -p y el prefijo de
+            # salida con -o; -n 1 escribe un solo volcado y -s 1 lo dispara tras 1s de
+            # vida (no 10 por defecto). El volcado queda en {dump_dir}/dump_*.
+            ejecutar_remoto(client, f"sudo -n procdump -s 1 -n 1 -p {pid} -o {dump_dir}/dump 2>&1")
         # ¿Generó procdump algún volcado? Cuenta cualquier archivo del dump_dir que
         # NO sea uno de los logs (procdump no usa extensión .core/.dmp fija).
         hay_dump = ejecutar_remoto(
@@ -154,10 +180,14 @@ def correr_y_volcar(client, local_path: str, user: str, segundos: int) -> Path:
         )
         if hay_dump.strip() == "0":
             print("[*] procdump no generó volcado; intentando gcore...")
-            ejecutar_remoto(client, f"sudo -n gcore -o {dump_dir}/core {target} 2>&1")
+            for pid in vivos:
+                ejecutar_remoto(client, f"sudo -n gcore -o {dump_dir}/core {pid} 2>&1")
 
-    # Matar cualquier proceso superviviente de la muestra.
+    # Matar la muestra y todo superviviente: por nombre Y por PID (si se renombró a
+    # /tmp con nombre aleatorio, `pkill -f <nombre>` no basta).
     ejecutar_remoto(client, f"sudo -n pkill -9 -f {nombre} 2>/dev/null; true", mostrar=False)
+    for pid in vivos:
+        ejecutar_remoto(client, f"sudo -n kill -9 {pid} 2>/dev/null; true", mostrar=False)
 
     # Traer resultados al host.
     destino = Path("dynamic_output") / datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -56,8 +56,25 @@ python3 dataset/scripts/build_dataset.py --auth-key <tu-key>
 3. Deduplica por `sha256`, ordena por familia y fecha, y numera.
 4. Escribe `botnet_elf.csv` y `botnet_elf.json`.
 
-La arquitectura del procesador (`arm`, `mips`, `x86_64`...) se deduce de los
-tags de cada muestra.
+La arquitectura del procesador (`arm`, `mips`, `mipsel`, `x86`, `x86_64`,
+`aarch64`, `powerpc`, `sh4`, `m68k`, `sparc`, `arc`, `s390x`) se deduce del
+**nombre del archivo** —las botnets ELF nombran su binario por la arquitectura
+objetivo (`linux_arm7`, `wife.i686`, `boatnet.mips`, `SH4`)— y, en su defecto,
+de los tags. Queda vacía (~45 %) solo cuando el nombre es un hash o un nombre de
+loader sin arquitectura (`.i`, `Mozi.m`, `bin.sh`); ahí haría falta descargar el
+binario y mirarlo con `file`/`readelf`, cosa que el catálogo no hace a propósito.
+
+### Rellenar `procesador` sin reconstruir (offline)
+
+Si ya tienes el catálogo y solo quieres recalcular la arquitectura sin volver a
+consultar MalwareBazaar (no necesita Auth-Key ni red):
+
+```bash
+python3 dataset/scripts/fill_arch.py
+```
+
+Reescribe `botnet_elf.csv` y `botnet_elf.json` con la columna `procesador` al
+día usando la misma lógica que `build_dataset.py`.
 
 ## Salida
 

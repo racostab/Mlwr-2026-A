@@ -1,6 +1,0 @@
-configuracion.ini
-# Excluir config.init de la carpeta docker
-docker/config.init
-
-# Excluir config.init de la carpeta vbox
-vbox/config.init

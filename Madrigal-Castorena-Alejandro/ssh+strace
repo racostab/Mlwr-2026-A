@@ -1,0 +1,44 @@
+#!/bin/bash
+set -euo pipefail
+
+SERVER_USER="usuario-lab"
+SERVER_HOST="192.168.56.101"
+CONTAINER_NAME="malware-lab"
+REMOTE_TMP="/tmp"
+CONTAINER_DIR="/tmp"
+
+CARPETA="$1"
+NOMBRE_CARPETA=$(basename "$CARPETA")
+
+# 1. Copiar la carpeta al host remoto
+scp -r "$CARPETA" "$SERVER_USER@$SERVER_HOST:$REMOTE_TMP/"
+
+# 2. Procesar los archivos en el host remoto
+ssh "$SERVER_USER@$SERVER_HOST" bash <<EOF
+
+for ARCHIVO in "$REMOTE_TMP/$NOMBRE_CARPETA"/*; do
+
+    if [ -f "\$ARCHIVO" ]; then
+
+	echo
+
+        NOMBRE=\$(basename "\$ARCHIVO")
+
+        echo "====== SYSCALLS \$NOMBRE ======"
+
+        docker cp "\$ARCHIVO" "$CONTAINER_NAME:$CONTAINER_DIR/"
+
+        docker exec -w "$CONTAINER_DIR" "$CONTAINER_NAME" chmod +x "\$NOMBRE"
+
+        docker exec -w "$CONTAINER_DIR" "$CONTAINER_NAME" \
+            timeout -s INT 15 \
+            strace -f -y -s 100 \
+            -e signal=none \
+            -e trace=execve,openat,read,write,close,socket,connect \
+            "./\$NOMBRE"
+
+    fi
+
+done
+
+EOF

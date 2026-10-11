@@ -1,0 +1,9 @@
+#!/bin/bash
+
+SERVER_USER="usuario-lab"
+SERVER_HOST="192.168.56.101"
+CONTAINER_NAME="malware-lab"
+
+# Conectar con host y ejecutar comando dentro de contenedor 
+ssh "$SERVER_USER@$SERVER_HOST" \
+  "docker exec $CONTAINER_NAME $*"

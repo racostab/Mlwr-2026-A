@@ -1,0 +1,127 @@
+#!/bin/bash
+set -euo pipefail
+
+# ==========================================================
+# CONFIGURACIÓN
+# ==========================================================
+SERVER_USER="usuario-lab"
+SERVER_HOST="192.168.56.101"
+CONTAINER_NAME="malware-lab"
+REMOTE_TMP="/tmp"
+CONTAINER_DIR="/tmp"
+DUMP_DIR="/tmp/dumps"
+ESPERA_DUMP=1      # segundos antes del primer volcado (para que arranque)
+NUM_DUMPS=3        # cuántos volcados tomar de cada muestra (procdump -n)
+INTERVALO=5        # segundos entre volcados (procdump -s)
+DURACION=20        # tiempo máximo de ejecución de cada muestra
+
+# ==========================================================
+# VALIDACIÓN
+# ==========================================================
+if [ $# -lt 1 ]; then
+    echo "Uso: $0 <carpeta_de_muestras>"
+    exit 1
+fi
+
+CARPETA="${1%/}"   # quita la barra final si la tiene
+NOMBRE_CARPETA=$(basename "$CARPETA")
+DESTINO="./dumps_${NOMBRE_CARPETA}_$(date +%F_%H%M%S)"
+
+if [ ! -d "$CARPETA" ]; then
+    echo "[!] '$CARPETA' no es una carpeta"
+    exit 1
+fi
+
+# ==========================================================
+# 1. COPIAR LAS MUESTRAS AL HOST REMOTO
+# ==========================================================
+echo "[+] Copiando muestras a $SERVER_HOST..."
+scp -r "$CARPETA" "$SERVER_USER@$SERVER_HOST:$REMOTE_TMP/"
+
+# ==========================================================
+# 2. PROCESAR LAS MUESTRAS EN EL HOST REMOTO
+# ==========================================================
+ssh "$SERVER_USER@$SERVER_HOST" bash <<EOF
+set -u
+
+# Empezar con la carpeta de volcados limpia
+docker exec "$CONTAINER_NAME" rm -rf "$DUMP_DIR"
+docker exec "$CONTAINER_NAME" mkdir -p "$DUMP_DIR"
+
+for ARCHIVO in "$REMOTE_TMP/$NOMBRE_CARPETA"/*; do
+    [ -f "\$ARCHIVO" ] || continue
+
+    NOMBRE=\$(basename "\$ARCHIVO")
+    echo
+    echo "========================================"
+    echo "Procesando: \$NOMBRE"
+    echo "========================================"
+
+    # Copiar la muestra al contenedor y darle permiso de ejecución
+    docker cp "\$ARCHIVO" "$CONTAINER_NAME:$CONTAINER_DIR/"
+    docker exec -w "$CONTAINER_DIR" "$CONTAINER_NAME" chmod +x "\$NOMBRE"
+
+    # ------------------------------------------------------
+    # SYSCALLS (opcional, desactivado)
+    # ------------------------------------------------------
+    # docker exec -w "$CONTAINER_DIR" "$CONTAINER_NAME" \
+    #     timeout -s INT $DURACION \
+    #     strace -f -y -s 100 -e signal=none \
+    #     -e trace=execve,openat,read,write,close,socket,connect \
+    #     -o "$DUMP_DIR/\$NOMBRE.strace" \
+    #     "./\$NOMBRE"
+
+    # ------------------------------------------------------
+    # EJECUTAR EN SEGUNDO PLANO Y OBTENER EL PID
+    # ------------------------------------------------------
+    echo "[+] Ejecutando \$NOMBRE..."
+    PID=\$(docker exec -w "$CONTAINER_DIR" "$CONTAINER_NAME" \
+        sh -c 'nohup "./\$0" > "$DUMP_DIR/\$0.log" 2>&1 & echo \$!' "\$NOMBRE")
+    echo "[+] PID: \$PID"
+
+    # Esperar a que la muestra haga algo antes de volcar
+    sleep "$ESPERA_DUMP"
+
+    if ! docker exec "$CONTAINER_NAME" kill -0 "\$PID" 2>/dev/null; then
+        echo "[!] \$NOMBRE terminó antes del volcado (revisa \$NOMBRE.log)"
+        docker exec "$CONTAINER_NAME" rm -f "$CONTAINER_DIR/\$NOMBRE"
+        continue
+    fi
+
+    # ------------------------------------------------------
+    # VOLCADO DE MEMORIA
+    # ------------------------------------------------------
+    echo "[+] Generando $NUM_DUMPS volcados, uno cada $INTERVALO segundos..."
+    if docker exec "$CONTAINER_NAME" \
+        procdump -n "$NUM_DUMPS" -s "$INTERVALO" "\$PID" "$DUMP_DIR"; then
+        echo "[+] Volcados generados para \$NOMBRE"
+    else
+        echo "[!] procdump terminó con error (¿la muestra murió antes del último volcado?)"
+    fi
+
+    # ------------------------------------------------------
+    # ESPERAR A QUE TERMINE (CON LÍMITE) Y LIMPIAR
+    # ------------------------------------------------------
+    docker exec "$CONTAINER_NAME" timeout "$DURACION" tail --pid="\$PID" -f /dev/null || true
+    docker exec "$CONTAINER_NAME" kill -9 "\$PID" 2>/dev/null || true
+    docker exec "$CONTAINER_NAME" rm -f "$CONTAINER_DIR/\$NOMBRE"
+    echo "[+] \$NOMBRE terminado"
+done
+
+# ==========================================================
+# 3. SACAR LOS RESULTADOS DEL CONTENEDOR Y LIMPIAR EL HOST
+# ==========================================================
+rm -rf "$REMOTE_TMP/dumps_salida"
+docker cp "$CONTAINER_NAME:$DUMP_DIR" "$REMOTE_TMP/dumps_salida"
+rm -rf "$REMOTE_TMP/$NOMBRE_CARPETA"
+EOF
+
+# ==========================================================
+# 4. TRAER LOS RESULTADOS A ESTA MÁQUINA
+# ==========================================================
+scp -r "$SERVER_USER@$SERVER_HOST:$REMOTE_TMP/dumps_salida" "$DESTINO"
+ssh "$SERVER_USER@$SERVER_HOST" "rm -rf $REMOTE_TMP/dumps_salida"
+
+echo
+echo "[+] Resultados guardados en $DESTINO"
+ls -lh "$DESTINO"
